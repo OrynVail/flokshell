@@ -37,17 +37,14 @@ Item {
 
     readonly property bool expandedState: contentHoverHandler.hovered || notchHovered || parentHoverActive || isNavigating
 
-    // Keep the notch revealed while one of its own popups is open — otherwise it
-    // auto-hides the moment the pointer leaves the notch to reach the popup.
-    readonly property bool childPopupOpen: clockWidget.popupOpen || batteryWidget.popupOpen
-    onChildPopupOpenChanged: Visibilities.notchPopupOpen = childPopupOpen
-
     // Clock and BatteryIndicator were written for the bar; they only read
-    // orientation, plus barPosition for popup direction.
+    // orientation, plus barPosition for popup direction. appletAnchor spans the
+    // notch content, so applets centre on it and clear the notifications.
     QtObject {
         id: notchBarStub
         property string orientation: "horizontal"
         property string barPosition: root.notchPosition
+        property Item appletAnchor: root
     }
 
     property real mainRowMargin: 16

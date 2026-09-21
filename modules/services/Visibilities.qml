@@ -19,8 +19,20 @@ Singleton {
     property string lastFocusedScreen: ""
     property var contextMenu: null
     property bool playerMenuOpen: false
-    // A popup owned by a notch widget (clock, battery) is open — holds the notch revealed
-    property bool notchPopupOpen: false
+    // One applet at a time. Holds the notch revealed while any is open.
+    property var activeApplet: null
+    readonly property bool notchPopupOpen: activeApplet !== null
+
+    function openApplet(popup) {
+        if (activeApplet && activeApplet !== popup)
+            activeApplet.close();
+        activeApplet = popup;
+    }
+
+    function closeApplet(popup) {
+        if (activeApplet === popup)
+            activeApplet = null;
+    }
     readonly property var moduleNames: ["launcher", "dashboard", "overview", "powermenu", "tools"]
 
     function setContextMenu(menu) {

@@ -19,6 +19,13 @@ Singleton {
     property bool isUpdating: false
     property bool wasEnabledBeforeSleep: false
 
+    // nmcli refuses a rescan inside this window; requests are held, not dropped
+    readonly property int scanCooldownMs: 10000
+    property bool scanQueued: false
+    readonly property bool scanBusy: wifiScanning || scanQueued
+
+    property bool updatePending: false
+
     property var suspendConnections: Connections {
         target: SuspendManager
         function onPreparingForSleep() {
@@ -116,21 +123,49 @@ Singleton {
     }
 
     function rescanWifi(): void {
-        const now = Date.now();
-        if (now - lastScanTime < 10000) { // 10s throttle
-            getNetworks.running = true;
+        if (scanBusy)
+            return;
+
+        const elapsed = Date.now() - lastScanTime;
+        if (elapsed < scanCooldownMs) {
+            scanQueued = true;
+            refreshNetworkList();
+            scanCooldownTimer.interval = scanCooldownMs - elapsed;
+            scanCooldownTimer.restart();
             return;
         }
-        
-        lastScanTime = now;
+
+        performScan();
+    }
+
+    function performScan(): void {
+        lastScanTime = Date.now();
         wifiScanning = true;
         runAsync(["nmcli", "dev", "wifi", "list", "--rescan", "yes"]).then(() => {
             update();
-            getNetworks.running = true;
+            refreshNetworkList();
             wifiScanning = false;
         }).catch(e => {
             wifiScanning = false;
         });
+    }
+
+    Timer {
+        id: scanCooldownTimer
+        repeat: false
+        onTriggered: {
+            root.scanQueued = false;
+            root.performScan();
+        }
+    }
+
+    // A second start mid-flight is dropped by Process, so queue it
+    function refreshNetworkList(): void {
+        if (getNetworks.running) {
+            getNetworks.rerun = true;
+            return;
+        }
+        getNetworks.running = true;
     }
 
     function connectToWifiNetwork(accessPoint: WifiAccessPoint): void {
@@ -138,7 +173,7 @@ Singleton {
         root.wifiConnectTarget = accessPoint;
         isUpdating = true;
         runAsync(["nmcli", "dev", "wifi", "connect", accessPoint.ssid]).then(() => {
-            getNetworks.running = true;
+            refreshNetworkList();
             root.wifiConnectTarget = null;
             isUpdating = false;
         }).catch(e => {
@@ -154,7 +189,7 @@ Singleton {
         if (active) {
             isUpdating = true;
             runAsync(["nmcli", "connection", "down", active.ssid]).then(() => {
-                getNetworks.running = true;
+                refreshNetworkList();
                 isUpdating = false;
             }).catch(e => {
                 isUpdating = false;
@@ -200,20 +235,29 @@ Singleton {
     }
 
     function performUpdate() {
-        if (isUpdating) return;
-        
-        // Skip/delay updates if UI closed
-        // nmcli monitor is event-based; safe to run.
-        // Optimization: Only update signal strength when UI open
+        if (isUpdating) {
+            updatePending = true;
+            return;
+        }
+
+        // Signal strength and the network list only matter while a UI is showing them
         const uiOpen = GlobalStates.dashboardOpen || GlobalStates.launcherOpen || GlobalStates.overviewOpen;
-        
+
         isUpdating = true;
         updateConnectionType.startCheck();
         wifiStatusProcess.running = true;
         updateNetworkName.running = true;
-        
+
         if (uiOpen) {
             updateNetworkStrength.running = true;
+            refreshNetworkList();
+        }
+    }
+
+    onIsUpdatingChanged: {
+        if (!isUpdating && updatePending) {
+            updatePending = false;
+            update();
         }
     }
 
@@ -319,6 +363,7 @@ Singleton {
             LC_ALL: "C.UTF-8"
         })
         property string buffer: ""
+        property bool rerun: false
         stdout: SplitParser {
             onRead: data => {
                 getNetworks.buffer += data + "\n";
@@ -327,7 +372,12 @@ Singleton {
         onExited: (exitCode, exitStatus) => {
             const text = getNetworks.buffer;
             getNetworks.buffer = "";
-            
+
+            if (getNetworks.rerun) {
+                getNetworks.rerun = false;
+                Qt.callLater(() => getNetworks.running = true);
+            }
+
             Qt.callLater(() => {
                 if (text.length === 0) {
                     root.updateFriendlyList();

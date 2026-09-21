@@ -73,7 +73,7 @@ Item {
                         icon: Icons.sync,
                         tooltip: "Rescan networks",
                         enabled: NetworkService.wifiEnabled,
-                        loading: NetworkService.wifiScanning || NetworkService.isUpdating,
+                        loading: NetworkService.scanBusy || NetworkService.isUpdating,
                         onClicked: function () {
                             NetworkService.rescanWifi();
                         }
@@ -105,7 +105,7 @@ Item {
         // Empty state
         Text {
             anchors.centerIn: parent
-            visible: networkList.count === 0 && !NetworkService.wifiScanning
+            visible: networkList.count === 0 && !NetworkService.scanBusy
             text: NetworkService.wifiEnabled ? "No networks found" : "Wi-Fi is disabled"
             font.family: Config.theme.font
             font.pixelSize: Config.theme.fontSize

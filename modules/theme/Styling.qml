@@ -11,6 +11,9 @@ QtObject {
     readonly property int gutter: 12
     readonly property int tight: 8
 
+    // Applets stand apart from the notch, which has no fixed width of its own
+    readonly property int applet: 360
+
     function radius(offset) {
         return Config.roundness > 0 ? Math.max(Config.roundness + offset, 0) : 0;
     }

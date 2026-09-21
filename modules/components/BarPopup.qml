@@ -9,12 +9,11 @@ import qs.modules.theme
 import qs.modules.components
 import qs.config
 
-// BarPopup: A popup component that anchors to bar elements
-// Inspired by end-4/dots-hyprland BarPopup implementation
+// Base for the notch applets
 PopupWindow {
     id: root
 
-    // Required: the item this popup anchors to
+    // Used only when the bar supplies no appletAnchor
     required property Item anchorItem
     // Required: the bar panel for position detection
     required property var bar
@@ -52,8 +51,11 @@ PopupWindow {
     // Total size including shadow margin
     readonly property int totalWidth: contentWidth + shadowMargin * 2
     readonly property int totalHeight: contentHeight + shadowMargin * 2
-    property int contentWidth: 220
+    property int contentWidth: Styling.applet
     property int contentHeight: 150
+
+    // Applets centre on the notch, not on the icon that opened them
+    readonly property Item positionAnchor: (bar && bar.appletAnchor) ? bar.appletAnchor : anchorItem
 
     implicitWidth: totalWidth
     implicitHeight: totalHeight
@@ -63,30 +65,21 @@ PopupWindow {
     readonly property int frameThickness: Config.frame?.thickness ?? 0
     readonly property int effectiveFrameOffset: frameEnabled ? frameThickness : 0
 
-    // Anchor positioning
-    // The anchor.rect defines where the popup window's top-left corner will be placed
-    // relative to the anchorItem's top-left corner
-    anchor.item: anchorItem
+    anchor.item: positionAnchor
     anchor.rect.x: {
         if (barVertical) {
-            // Left bar: popup appears to the right of the button
             if (barAtLeft)
-                return anchorItem.width + visualMargin + effectiveFrameOffset - shadowMargin;
-            // Right bar: popup appears to the left of the button
+                return positionAnchor.width + visualMargin + effectiveFrameOffset - shadowMargin;
             return -totalWidth + shadowMargin - visualMargin - effectiveFrameOffset;
         }
-        // Top/Bottom bar: center horizontally relative to button
-        return (anchorItem.width - totalWidth) / 2;
+        return (positionAnchor.width - totalWidth) / 2;
     }
     anchor.rect.y: {
         if (barVertical) {
-            // Left/Right bar: center vertically relative to button
-            return (anchorItem.height - totalHeight) / 2;
+            return (positionAnchor.height - totalHeight) / 2;
         }
-        // Top bar: popup appears below the button
         if (barAtTop)
-            return anchorItem.height + visualMargin + effectiveFrameOffset - shadowMargin;
-        // Bottom bar: popup appears above the button
+            return positionAnchor.height + visualMargin + effectiveFrameOffset - shadowMargin;
         return -totalHeight + shadowMargin - visualMargin - effectiveFrameOffset;
     }
     anchor.rect.width: 0
@@ -105,7 +98,6 @@ PopupWindow {
 
         onCleared: {
             if (root.closeOnFocusLost && root.isOpen) {
-                root.isOpen = false;
                 root.closedExternally();
                 root.close();
             }
@@ -167,20 +159,14 @@ PopupWindow {
         if (visible)
             return;
 
-        // Debug positioning
-        console.log("BarPopup OPEN - position:", barPosition, "anchorItem:", anchorItem.width, "x", anchorItem.height, "rect.x:", anchor.rect.x, "rect.y:", anchor.rect.y);
+        Visibilities.openApplet(root);
 
-        // Set logical state immediately
         isOpen = true;
 
-        // Reset animation state
         popupOpacity = 0;
         popupScale = 0.9;
-
-        // Show popup
         visible = true;
 
-        // Start animation after a frame
         Qt.callLater(() => {
             popupOpacity = 1;
             popupScale = 1;
@@ -192,15 +178,14 @@ PopupWindow {
         if (!visible)
             return;
 
-        // Set logical state immediately
+        Visibilities.closeApplet(root);
+
         isOpen = false;
         focusActive = false;
 
-        // Animate out
         popupOpacity = 0;
         popupScale = 0.9;
 
-        // Hide after animation
         closeTimer.restart();
     }
 

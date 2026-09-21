@@ -31,8 +31,8 @@ Button {
     // Qt.Unchecked = 0, Qt.PartiallyChecked = 1, Qt.Checked = 2
     property int checkState: 0
 
-    implicitWidth: 200
-    implicitHeight: isSeparator ? 10 : 36
+    implicitWidth: Styling.applet
+    implicitHeight: isSeparator ? Styling.gutter : Styling.control
     enabled: !isSeparator
 
     // Reset default styling
@@ -50,18 +50,17 @@ Button {
             height: 1
             color: Colors.surfaceBright
             anchors.centerIn: parent
-            width: parent.width - 16
+            width: parent.width - Styling.gutter * 2
         }
     }
 
     contentItem: RowLayout {
-        spacing: 8
+        spacing: Styling.tight
         visible: !root.isSeparator
 
-        // Add margins for content
         anchors.fill: parent
-        anchors.leftMargin: 8 + root.depth * 12
-        anchors.rightMargin: 8
+        anchors.leftMargin: Styling.gutter + root.depth * Styling.gutter
+        anchors.rightMargin: Styling.gutter
 
         // Check/Radio indicator
         Item {

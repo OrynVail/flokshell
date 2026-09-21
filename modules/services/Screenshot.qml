@@ -29,6 +29,9 @@ QtObject {
     property var monitors: [] // List of monitor objects
     
     // Selection state to synchronize UI across monitors
+    // Monitor the last capture belongs to; the preview overlay routes on it
+    property string lastCaptureMonitor: ""
+
     property int selectionX: 0
     property int selectionY: 0
     property int selectionW: 0
@@ -354,8 +357,10 @@ QtObject {
         console.log(`Screenshot: Cropping on monitor ${m.name} (Scale ${m.scale})`);
         console.log(`Screenshot: Logical Local: ${localX},${localY} ${w}x${h} -> Physical: ${physX},${physY} ${physW}x${physH}`);
         
+        root.lastCaptureMonitor = m.name;
+
         var srcPath = root.tempPathBase + "_" + m.name + ".png";
-        
+
         // convert input.png -crop WxH+X+Y output.png
         var geom = `${physW}x${physH}+${physX}+${physY}`;
         cropProcess.command = ["convert", srcPath, "-crop", geom, root.finalPath];
@@ -412,6 +417,8 @@ QtObject {
             root.finalPath = root.screenshotsDir + "/" + filename
         }
         
+        root.lastCaptureMonitor = monitorName;
+
         var srcPath = root.tempPathBase + "_" + monitorName + ".png";
         cropProcess.command = ["cp", srcPath, root.finalPath];
         cropProcess.running = true;

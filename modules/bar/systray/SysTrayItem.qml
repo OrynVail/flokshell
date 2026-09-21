@@ -17,6 +17,13 @@ MouseArea {
     property int trayItemSize: 20
     property bool isHovered: false
 
+    readonly property var trayIconSource: {
+        const iconPath = item.icon.toString();
+        if (iconPath.includes("spotify"))
+            return Quickshell.iconPath("spotify-client");
+        return item.icon;
+    }
+
     acceptedButtons: Qt.LeftButton | Qt.RightButton
     Layout.fillHeight: bar.orientation === "horizontal"
     Layout.fillWidth: bar.orientation === "vertical"
@@ -42,24 +49,57 @@ MouseArea {
         anchorItem: root
         bar: root.bar
 
-        // Use a reasonable width for the menu
-        contentWidth: 220
-        // Height adapts to content, with a max limit if needed.
-        // Must include vertical padding (8 top + 8 bottom = 16)
-        contentHeight: Math.min(itemsColumn.implicitHeight + 16, 400)
+        popupPadding: Styling.tight
+        contentHeight: Math.min(header.height + headerRule.height + Styling.tight + itemsColumn.implicitHeight, 420) + popupPadding * 2
 
-        popupPadding: 8
-        // 8px standard margin + 8px SysTray container padding to ensure correct offset from the main bar
-        visualMargin: 16
-
-        // Using QsMenuOpener to access menu items
         QsMenuOpener {
             id: menuOpener
             menu: root.item.menu
         }
 
+        // Centred on the notch, nothing else says which app this menu is
+        RowLayout {
+            id: header
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.leftMargin: Styling.tight
+            anchors.rightMargin: Styling.tight
+            height: Styling.control - Styling.tight
+            spacing: Styling.tight
+
+            IconImage {
+                source: root.trayIconSource
+                implicitWidth: Styling.glyph
+                implicitHeight: Styling.glyph
+                smooth: true
+            }
+
+            Text {
+                Layout.fillWidth: true
+                text: root.item.title || root.item.id || ""
+                color: Colors.overBackground
+                font.family: Styling.defaultFont
+                font.pixelSize: Styling.fontSize(0)
+                font.bold: true
+                elide: Text.ElideRight
+                verticalAlignment: Text.AlignVCenter
+            }
+        }
+
+        Separator {
+            id: headerRule
+            anchors.top: header.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+        }
+
         ScrollView {
-            anchors.fill: parent
+            anchors.top: headerRule.bottom
+            anchors.topMargin: Styling.tight
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
             contentWidth: availableWidth
             clip: true
 
@@ -163,13 +203,7 @@ MouseArea {
 
     IconImage {
         id: trayIcon
-        source: {
-            const iconPath = root.item.icon.toString();
-            if (iconPath.includes("spotify")) {
-                return Quickshell.iconPath("spotify-client");
-            }
-            return root.item.icon;
-        }
+        source: root.trayIconSource
         anchors.centerIn: parent
         width: parent.width
         height: parent.height

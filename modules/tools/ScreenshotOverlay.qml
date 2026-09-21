@@ -65,19 +65,8 @@ PanelWindow {
     Connections {
         target: Screenshot
         function onImageSaved(path) {
-            var s = root.targetScreen;
-            var mx = Screenshot.selectionX;
-            var my = Screenshot.selectionY;
-            var logicalW = s.width;
-
-            if (mx >= s.x && mx < (s.x + s.width) && my >= s.y && my < (s.y + s.height)) {
+            if (Screenshot.lastCaptureMonitor === root.targetScreen.name)
                 root.imagePath = path;
-            } else if (Screenshot.captureMode === "screen") {
-                var cursor = Quickshell.cursor;
-                if (cursor && cursor.screen && cursor.screen.name === s.name) {
-                    root.imagePath = path;
-                }
-            }
         }
     }
 
@@ -95,22 +84,22 @@ PanelWindow {
             // Calculate scale to fit within 250x250 while preserving aspect ratio
             property real maxWidth: 250
             property real maxHeight: 250
-            property real imgRatio: img.sourceSize.width / img.sourceSize.height
+            property real imgRatio: img.implicitWidth / img.implicitHeight
             property real boxRatio: maxWidth / maxHeight
 
             width: {
-                if (img.sourceSize.width <= 0)
+                if (img.implicitWidth <= 0)
                     return 0;
                 if (imgRatio > boxRatio)
                     return maxWidth;
-                return Math.min(maxWidth, img.sourceSize.width * (maxHeight / img.sourceSize.height));
+                return Math.min(maxWidth, img.implicitWidth * (maxHeight / img.implicitHeight));
             }
 
             height: {
-                if (img.sourceSize.height <= 0)
+                if (img.implicitHeight <= 0)
                     return 0;
                 if (imgRatio > boxRatio)
-                    return Math.min(maxHeight, img.sourceSize.height * (maxWidth / img.sourceSize.width));
+                    return Math.min(maxHeight, img.implicitHeight * (maxWidth / img.implicitWidth));
                 return maxHeight;
             }
 
@@ -124,7 +113,9 @@ PanelWindow {
                 id: img
                 anchors.fill: parent
                 source: root.imagePath !== "" ? "file://" + root.imagePath : ""
-                sourceSize: Qt.size(width, height)
+                // Must not derive from the container: it sizes itself off the
+                // decoded image, so a binding back settles at zero
+                sourceSize: Qt.size(imgContainer.maxWidth * 2, imgContainer.maxHeight * 2)
                 fillMode: Image.PreserveAspectCrop
                 asynchronous: true
 
