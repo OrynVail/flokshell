@@ -112,7 +112,7 @@ Singleton {
             }
         }
         onLoadFailed: {
-            if (error.toString().includes("FileNotFound") && !root.themeReady) {
+            if (error === FileViewError.FileNotFound && !root.themeReady) {
                 handleMissingConfig("theme", themeLoader, ThemeDefaults.data, () => {
                     root.themeReady = true;
                 });
@@ -503,7 +503,7 @@ Singleton {
             }
         }
         onLoadFailed: {
-            if (error.toString().includes("FileNotFound") && !root.frameReady) {
+            if (error === FileViewError.FileNotFound && !root.frameReady) {
                 handleMissingConfig("frame", frameLoader, FrameDefaults.data, () => {
                     root.frameReady = true;
                 });
@@ -539,7 +539,7 @@ Singleton {
             }
         }
         onLoadFailed: {
-            if (error.toString().includes("FileNotFound") && !root.workspacesReady) {
+            if (error === FileViewError.FileNotFound && !root.workspacesReady) {
                 handleMissingConfig("workspaces", workspacesLoader, WorkspacesDefaults.data, () => {
                     root.workspacesReady = true;
                 });
@@ -578,7 +578,7 @@ Singleton {
             }
         }
         onLoadFailed: {
-            if (error.toString().includes("FileNotFound") && !root.overviewReady) {
+            if (error === FileViewError.FileNotFound && !root.overviewReady) {
                 handleMissingConfig("overview", overviewLoader, OverviewDefaults.data, () => {
                     root.overviewReady = true;
                 });
@@ -618,7 +618,7 @@ Singleton {
             }
         }
         onLoadFailed: {
-            if (error.toString().includes("FileNotFound") && !root.notchReady) {
+            if (error === FileViewError.FileNotFound && !root.notchReady) {
                 handleMissingConfig("notch", notchLoader, NotchDefaults.data, () => {
                     root.notchReady = true;
                 });
@@ -665,7 +665,7 @@ Singleton {
             }
         }
         onLoadFailed: {
-            if (error.toString().includes("FileNotFound") && !root.compositorReady) {
+            if (error === FileViewError.FileNotFound && !root.compositorReady) {
                 handleMissingConfig("compositor", compositorLoader, CompositorDefaults.data, () => {
                     root.compositorReady = true;
                 });
@@ -741,7 +741,7 @@ Singleton {
             }
         }
         onLoadFailed: {
-            if (error.toString().includes("FileNotFound") && !root.mediaReady) {
+            if (error === FileViewError.FileNotFound && !root.mediaReady) {
                 handleMissingConfig("media", mediaLoader, MediaDefaults.data, () => {
                     root.mediaReady = true;
                 });
@@ -780,7 +780,7 @@ Singleton {
             }
         }
         onLoadFailed: {
-            if (error.toString().includes("FileNotFound") && !root.performanceReady) {
+            if (error === FileViewError.FileNotFound && !root.performanceReady) {
                 handleMissingConfig("performance", performanceLoader, PerformanceDefaults.data, () => {
                     root.performanceReady = true;
                 });
@@ -820,7 +820,7 @@ Singleton {
             }
         }
         onLoadFailed: {
-            if (error.toString().includes("FileNotFound") && !root.weatherReady) {
+            if (error === FileViewError.FileNotFound && !root.weatherReady) {
                 handleMissingConfig("weather", weatherLoader, WeatherDefaults.data, () => {
                     root.weatherReady = true;
                 });
@@ -856,7 +856,7 @@ Singleton {
             }
         }
         onLoadFailed: {
-            if (error.toString().includes("FileNotFound") && !root.desktopReady) {
+            if (error === FileViewError.FileNotFound && !root.desktopReady) {
                 handleMissingConfig("desktop", desktopLoader, DesktopDefaults.data, () => {
                     root.desktopReady = true;
                 });
@@ -894,7 +894,7 @@ Singleton {
             }
         }
         onLoadFailed: {
-            if (error.toString().includes("FileNotFound") && !root.lockscreenReady) {
+            if (error === FileViewError.FileNotFound && !root.lockscreenReady) {
                 handleMissingConfig("lockscreen", lockscreenLoader, LockscreenDefaults.data, () => {
                     root.lockscreenReady = true;
                 });
@@ -929,7 +929,7 @@ Singleton {
             }
         }
         onLoadFailed: {
-            if (error.toString().includes("FileNotFound") && !root.prefixReady) {
+            if (error === FileViewError.FileNotFound && !root.prefixReady) {
                 handleMissingConfig("prefix", prefixLoader, PrefixDefaults.data, () => {
                     root.prefixReady = true;
                 });
@@ -968,7 +968,7 @@ Singleton {
             }
         }
         onLoadFailed: {
-            if (error.toString().includes("FileNotFound") && !root.systemReady) {
+            if (error === FileViewError.FileNotFound && !root.systemReady) {
                 handleMissingConfig("system", systemLoader, SystemDefaults.data, () => {
                     root.systemReady = true;
                 });
@@ -1046,7 +1046,7 @@ Singleton {
             }
         }
         onLoadFailed: {
-            if (error.toString().includes("FileNotFound") && !root.dockReady) {
+            if (error === FileViewError.FileNotFound && !root.dockReady) {
                 handleMissingConfig("dock", dockLoader, DockDefaults.data, () => {
                     root.dockReady = true;
                 });
@@ -3288,24 +3288,24 @@ Singleton {
         var targetPath = root.configDir + "/" + name + ".json";
         console.log(name + ".json not found, checking preset: " + presetPath);
 
-        // Create a Process component dynamically to copy the file
-        var copyProcess = Qt.createQmlObject(
-            "import QtQuick 2.0; Process { running: true; command: ['cp', '" + presetPath + "', '" + targetPath + "']; onFinished: { console.log('Copy finished for " + name + "'); } }",
-            root,
-            "copyProcess"
-        );
+        // Reload after the copy exits; alongside it races the write.
+        var copyProcess = Qt.createQmlObject("import Quickshell.Io; Process {}", root, "copyProcess");
+        copyProcess.command = ["cp", presetPath, targetPath];
+        copyProcess.exited.connect(() => {
+            copyProcess.destroy();
+            loader.reload();
 
-        // Reload the loader to pick up the copied file
-        loader.reload();
-
-        // If still not ready after reload, use defaults as fallback
-        Qt.callLater(() => {
-            if (!root[name + "Ready"]) {
-                console.log("Using defaults for " + name + ".json");
-                loader.setText(JSON.stringify(defaults, null, 2));
-            }
-            onComplete();
+            // No preset, or the copy failed. The file must exist or queueWrite
+            // refuses to save and nothing changed in settings survives.
+            Qt.callLater(() => {
+                if (!root[name + "Ready"]) {
+                    console.log("Using defaults for " + name + ".json");
+                    loader.setText(JSON.stringify(defaults, null, 2));
+                }
+                onComplete();
+            });
         });
+        copyProcess.running = true;
     }
 
 
