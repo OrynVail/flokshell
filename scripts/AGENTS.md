@@ -17,9 +17,7 @@ Python and Bash backend utilities invoked by QML services via `Quickshell.Io.Pro
 | `thumbgen.py` | Python | `WallpapersTab` | Wallpaper thumbnail generation |
 | `desktop_thumbgen.py` | Python | `DesktopService.qml` | Desktop icon thumbnail generation |
 | `lockwall.py` | Python | `LockScreen.qml` | Lockscreen wallpaper blur preprocessing |
-| `brightness_list.sh` | Bash | `Brightness.qml` | Enumerates available brightness devices |
-| `weather.sh` | Bash | `WeatherService.qml` | Weather data fetching |
-| `wf-record.sh` | Bash | Screen recording | `wf-recorder`/`gpu-screen-recorder` wrapper |
+| `brightness_list.sh` | Bash | `cli.sh` | Enumerates available brightness devices |
 | `link_preview.py` | Python | Clipboard | URL metadata/preview extraction |
 | `coverart.py` | Python | `CoverArtService.qml` | Resolves MPRIS cover art into a content-addressed cache |
 | `sleep_monitor.sh` | Bash | `SuspendManager` | Monitors system sleep/wake events |

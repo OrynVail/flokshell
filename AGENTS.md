@@ -57,6 +57,7 @@ grim -o <output> shot.png                # multi-monitor: pass the output name
 │   └── widgets/          # dashboard, launcher, overview, powermenu, tools, defaultview
 ├── assets/               # Wallpapers, colour presets, sounds
 ├── scripts/              # Python/Bash backends
+├── flokd/                # Rust service daemon (see flokd/AGENTS.md)
 ├── nix/                  # Flake packages and module definitions
 ├── shell.qml             # Entry point
 └── cli.sh                # Launch wrapper and IPC controller
@@ -64,6 +65,11 @@ grim -o <output> shot.png                # multi-monitor: pass the output name
 
 `modules/bar/` is a misnomer kept for import stability — the bar was removed, but its
 widgets live on inside the notch and everything imports `qs.modules.bar.*`.
+
+The service layer is being moved into `flokd`, a Rust daemon that owns fetching, parsing
+and system integration so QML is left with the rendering. A ported service keeps its
+singleton in `modules/services/` with the same property names and becomes a socket client,
+so nothing downstream changes. `WeatherService` is the first and currently the only one.
 
 ## WHERE TO LOOK
 | Task | Location |
@@ -120,4 +126,3 @@ widgets live on inside the notch and everything imports `qs.modules.bar.*`.
 - `axctl` is an external Go binary from upstream, not built here.
 - Components that take a `bar` property want an object with `orientation` and
   `barPosition`. The notch and dashboard pass small `QtObject` stubs.
-- `screenshotToolMode` in `GlobalStates.qml` is deprecated.

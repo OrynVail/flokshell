@@ -22,6 +22,21 @@ in {
   config = lib.mkIf cfg.enable {
     environment.systemPackages = [ cfg.package ];
 
+    # The shell must never spawn this: a daemon the shell owns cannot outlive a
+    # reload, and a failed start it cannot retry is how a stale socket becomes a
+    # permanent error loop. See flokd.md §4.
+    systemd.user.services.flokd = {
+      description = "flokshell service daemon";
+      wantedBy = [ "graphical-session.target" ];
+      wants = [ "graphical-session.target" ];
+      after = [ "graphical-session.target" ];
+      serviceConfig = {
+        ExecStart = "${cfg.package}/bin/flokd";
+        Restart = "always";
+        RestartSec = 2;
+      };
+    };
+
     # Register fonts with fontconfig (NixOS handles this via fonts.packages)
     fonts.packages = lib.mkIf cfg.fonts.enable (with pkgs; [
       roboto

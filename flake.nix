@@ -45,7 +45,17 @@
           Flokshell = self.packages.${system}.default;
         in {
           default = pkgs.mkShell {
-            packages = [ Flokshell ];
+            packages = [
+              Flokshell
+
+              # flokd
+              pkgs.cargo
+              pkgs.rustc
+              pkgs.clippy
+              pkgs.rustfmt
+              pkgs.rust-analyzer
+              pkgs.pkg-config
+            ];
             shellHook = ''
               export QML2_IMPORT_PATH="${Flokshell}/lib/qt-6/qml:$QML2_IMPORT_PATH"
               export QML_IMPORT_PATH="$QML2_IMPORT_PATH"

@@ -7,6 +7,7 @@ let
 
   # Import sub-packages
   ttf-phosphor-icons = import ./phosphor-icons.nix { inherit pkgs; };
+  flokd = import ./flokd.nix { inherit pkgs lib version; };
 
   # Import modular package lists
   corePkgs = import ./core.nix { inherit pkgs quickshellPkg; };
@@ -18,7 +19,7 @@ let
 
   # Combine all packages (NixOS-specific deps handled by the module)
   baseEnv = corePkgs
-    ++ [ axctlPkg ]
+    ++ [ axctlPkg flokd ]
     ++ toolsPkgs
     ++ mediaPkgs
     ++ appsPkgs

@@ -10,6 +10,9 @@ __pycache__/
 result
 result-*
 
+# Rust
+/flokd/target/
+
 # Editors
 .vscode/
 .idea/
@@ -27,3 +30,4 @@ result-*
 
 # Private
 /flokshell.md
+/flokd.md
