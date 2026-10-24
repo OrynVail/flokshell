@@ -22,9 +22,9 @@ it well.
 | Community | **[Discord](https://axeni.de/discord)** |
 | Licence | **AGPL-3.0**, upstream copyright intact in [LICENSE](LICENSE) |
 
-**For what this shell is and how to install it, read [Ambxst's README](https://github.com/Axenide/Ambxst).**
-It is the better document, and it describes the thing that actually ships. Nothing is repeated
-here.
+**For what this shell is, read [Ambxst's README](https://github.com/Axenide/Ambxst).** It is the
+better document and nothing about it is repeated here. Only the NixOS path is written up below,
+because that one is mine and his does not cover it.
 
 ---
 
@@ -67,10 +67,46 @@ things I read in upstream's source, not things I measured it doing.
 
 ---
 
+## Install
+
+NixOS only. There is no general installer here — for anything else, Ambxst's is the one to use.
+
+### Flake
+
+```nix
+{
+  inputs.flokshell.url = "github:OrynVail/flokshell";
+
+  # in your nixosSystem modules list
+  flokshell.nixosModules.default
+}
+```
+
+That brings the package, the fonts, and `flokd` as a systemd user service. Then start the shell
+from your compositor's autostart — the command is `flok`.
+
+### Profile
+
+```bash
+nix profile install github:OrynVail/flokshell
+```
+
+Enough to look at it, and easy to undo.
+
+> [!IMPORTANT]
+> The profile install is the package alone. `flokd` gets no service, so whatever it owns —
+> currently the weather — stays empty and nothing restarts it. The recommended system services
+> (`upower`, `power-profiles-daemon`, NetworkManager) are not enabled either; most setups
+> already have them. Fonts are fine: the `flok` wrapper points fontconfig at its own bundle.
+
+No config file is needed either way. The shipped defaults in
+`assets/presets/Flokshell Default/` are the setup I actually run.
+
+---
+
 ## Status
 
 In development, continuously, with no end state in view.
 
-There are no instructions here yet and that is deliberate. When this is far enough from upstream
-to deserve its own documentation it will get some. Until then it is for me, and Ambxst is the
-one to use.
+The install notes above cover NixOS and nothing else, deliberately — that is the path I actually
+run and can vouch for. Everything else still points at Ambxst.

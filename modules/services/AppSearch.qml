@@ -2,7 +2,6 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
-import Quickshell.Io
 import qs.modules.services
 
 Singleton {
@@ -203,11 +202,9 @@ Singleton {
         app.execute();
     }
 
+    // One launch path for the whole shell.
     function runInActiveWorkspace(command) {
-        const p = Qt.createQmlObject('import Quickshell.Io; Process { }', root);
-        p.command = ["bash", "-c", "cd ~ && env -u HL_INITIAL_WORKSPACE_TOKEN setsid " + command + " < /dev/null > /dev/null 2>&1 &"];
-        p.onExited.connect(() => p.destroy());
-        p.running = true;
+        DesktopService.runInActiveWorkspace(command);
     }
 
     function getAllApps() {

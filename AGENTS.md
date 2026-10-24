@@ -111,6 +111,8 @@ so nothing downstream changes. `WeatherService` is the first and currently the o
 - **Null safety**: null-check nested properties; config reads can land before load.
 - **Bulk config**: `root.pauseAutoSave` when writing several keys at once.
 - **Async safety**: `Qt.callLater()` when modifying lists inside process handlers.
+- **Launching apps**: always `DesktopService.runInActiveWorkspace()`; a second copy of that
+  spawn line is a second answer.
 
 ## ANTI-PATTERNS
 - Hardcoding colours or sizes instead of `Config.*`, `Colors.*`, `Styling.*`.
