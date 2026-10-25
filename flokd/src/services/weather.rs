@@ -4,7 +4,7 @@ use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
-use crate::bus::Bus;
+use crate::bus::{Bus, Request};
 use crate::config;
 
 const SERVICE: &str = "weather";
@@ -150,7 +150,7 @@ impl Service {
         })
     }
 
-    pub async fn run(mut self, mut refresh: mpsc::Receiver<()>) {
+    pub async fn run(mut self, mut requests: mpsc::Receiver<Request>) {
         let mut config_changed = match config::watch() {
             Ok(rx) => rx,
             Err(e) => {
@@ -178,7 +178,10 @@ impl Service {
         loop {
             tokio::select! {
                 _ = tick.tick() => self.refresh(&location).await,
-                Some(()) = refresh.recv() => self.refresh(&location).await,
+                Some(req) = requests.recv() => match req.cmd.as_str() {
+                    "refresh" => self.refresh(&location).await,
+                    cmd => tracing::warn!("unknown command: {cmd}"),
+                },
                 Some(()) = config_changed.recv() => {
                     let next = self.location().await;
                     if next != location {

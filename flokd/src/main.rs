@@ -10,13 +10,15 @@ use serde::Deserialize;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::mpsc;
+use tokio::sync::mpsc::error::TrySendError;
 
-use bus::Bus;
+use bus::{Bus, Request};
 
 #[derive(Deserialize)]
 struct Command {
     service: String,
-    cmd: String,
+    #[serde(flatten)]
+    request: Request,
 }
 
 // XDG_RUNTIME_DIR, not /tmp: the system clears it on logout, which removes the
@@ -42,7 +44,7 @@ async fn main() -> Result<()> {
         .init();
 
     let bus = Bus::new();
-    let mut commands: HashMap<&str, mpsc::Sender<()>> = HashMap::new();
+    let mut commands: HashMap<&str, mpsc::Sender<Request>> = HashMap::new();
 
     let (weather_tx, weather_rx) = mpsc::channel(1);
     commands.insert("weather", weather_tx);
@@ -51,6 +53,11 @@ async fn main() -> Result<()> {
             .context("weather service")?
             .run(weather_rx),
     );
+
+    // Unlike a refresh, a dropped connect is lost.
+    let (network_tx, network_rx) = mpsc::channel(8);
+    commands.insert("network", network_tx);
+    tokio::spawn(services::network::Service::new(bus.clone()).run(network_rx));
 
     let path = socket_path();
     // Single instance is the unit's job; a leftover socket is never a live peer.
@@ -87,7 +94,7 @@ async fn main() -> Result<()> {
 async fn serve(
     stream: UnixStream,
     bus: Bus,
-    commands: HashMap<&'static str, mpsc::Sender<()>>,
+    commands: HashMap<&'static str, mpsc::Sender<Request>>,
 ) -> Result<()> {
     let (read, mut write) = stream.into_split();
 
@@ -134,16 +141,22 @@ async fn serve(
     Ok(())
 }
 
-fn dispatch(line: &str, commands: &HashMap<&'static str, mpsc::Sender<()>>) {
+fn dispatch(line: &str, commands: &HashMap<&'static str, mpsc::Sender<Request>>) {
     let Ok(c) = serde_json::from_str::<Command>(line) else {
         tracing::warn!("unparseable command: {line}");
         return;
     };
-    match (commands.get(c.service.as_str()), c.cmd.as_str()) {
-        (Some(tx), "refresh") => {
-            let _ = tx.try_send(());
+    let Some(tx) = commands.get(c.service.as_str()) else {
+        tracing::warn!("unknown service: {}", c.service);
+        return;
+    };
+    match tx.try_send(c.request) {
+        Ok(()) => {}
+        Err(TrySendError::Full(r)) => {
+            tracing::debug!(service = %c.service, cmd = %r.cmd, "queue full, dropped")
         }
-        (Some(_), cmd) => tracing::warn!(service = %c.service, "unknown command: {cmd}"),
-        (None, _) => tracing::warn!("unknown service: {}", c.service),
+        Err(TrySendError::Closed(_)) => {
+            tracing::error!(service = %c.service, "service has stopped")
+        }
     }
 }

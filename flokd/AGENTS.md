@@ -13,6 +13,7 @@ src/
 ├── bus.rs               # latest-state-per-service + broadcast to clients
 ├── config.rs            # reads ~/.config/flokshell/config/*.json, watches for changes
 └── services/
+    ├── network.rs       # NetworkManager over the system bus: state, scans, connects
     └── weather.rs       # open-meteo + geocoding + geoip fallback chain
 ```
 
@@ -26,7 +27,10 @@ Daemon to client:
 Client to daemon:
 ```json
 {"service":"weather","cmd":"refresh"}
+{"service":"network","cmd":"connect","args":{"ssid":"home"}}
 ```
+`args` is optional and belongs to the service: `main.rs` routes on `service` alone and each
+service parses its own commands, so adding one never touches dispatch.
 
 Every event is a **full-state replace for one service**, so receiving the same state twice is
 harmless. That is what lets a connecting client subscribe first and take the snapshot second

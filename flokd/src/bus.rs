@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::broadcast;
 
@@ -14,6 +14,15 @@ pub struct Event<'a> {
     pub service: &'a str,
     pub event: &'a str,
     pub data: &'a Value,
+}
+
+// What a client asked of one service. `args` is that service's to interpret, so
+// a tier that needs arguments never has to touch dispatch.
+#[derive(Deserialize, Debug)]
+pub struct Request {
+    pub cmd: String,
+    #[serde(default)]
+    pub args: Value,
 }
 
 #[derive(Clone)]

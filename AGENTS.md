@@ -69,7 +69,7 @@ widgets live on inside the notch and everything imports `qs.modules.bar.*`.
 The service layer is being moved into `flokd`, a Rust daemon that owns fetching, parsing
 and system integration so QML is left with the rendering. A ported service keeps its
 singleton in `modules/services/` with the same property names and becomes a socket client,
-so nothing downstream changes. `WeatherService` is the first and currently the only one.
+so nothing downstream changes. Ported so far: `WeatherService`, `NetworkService`.
 
 ## WHERE TO LOOK
 | Task | Location |
