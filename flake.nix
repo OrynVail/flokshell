@@ -18,7 +18,7 @@
       nixosModules.default = { pkgs, lib, ... }: {
         imports = [ ./nix/modules ];
         programs.flokshell.enable = lib.mkDefault true;
-        programs.flokshell.package = lib.mkDefault self.packages.${pkgs.system}.default;
+        programs.flokshell.package = lib.mkDefault self.packages.${pkgs.stdenv.hostPlatform.system}.default;
       };
 
       packages = flokshellLib.forAllSystems (system:
