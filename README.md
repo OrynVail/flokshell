@@ -95,10 +95,10 @@ Enough to look at it, and easy to undo.
 
 > [!IMPORTANT]
 > The profile install is the package alone. `flokd` gets no service, so whatever it owns —
-> currently the weather and wifi — stays empty and nothing restarts it. The recommended
-> system services (`upower`, `power-profiles-daemon`, NetworkManager) are not enabled either;
-> most setups already have them. Fonts are fine: the `flok` wrapper points fontconfig at its
-> own bundle.
+> currently weather, wifi and Bluetooth — stays empty and nothing restarts it. The
+> recommended system services (`upower`, `power-profiles-daemon`, NetworkManager) are not
+> enabled either; most setups already have them. Fonts are fine: the `flok` wrapper points
+> fontconfig at its own bundle.
 
 No config file is needed either way. The shipped defaults in
 `assets/presets/Flokshell Default/` are the setup I actually run.

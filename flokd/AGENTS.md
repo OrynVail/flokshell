@@ -12,7 +12,9 @@ src/
 ├── main.rs              # socket server, client fan-out, command dispatch
 ├── bus.rs               # latest-state-per-service + broadcast to clients
 ├── config.rs            # reads ~/.config/flokshell/config/*.json, watches for changes
+├── dbus.rs              # shared system-bus helpers: calls, property reads, owner watch
 └── services/
+    ├── bluetooth.rs     # BlueZ: adapter, devices, discovery, connects
     ├── network.rs       # NetworkManager over the system bus: state, scans, connects
     └── weather.rs       # open-meteo + geocoding + geoip fallback chain
 ```

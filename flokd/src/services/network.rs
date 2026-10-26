@@ -7,10 +7,11 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio::time::Instant;
 use zbus::message::Type as MessageType;
-use zbus::wire::{ObjectPath, OwnedObjectPath, OwnedVariant, Type, Variant};
+use zbus::wire::{OwnedObjectPath, OwnedVariant, Type, Variant};
 use zbus::{Connection, MatchRule, Message, MessageStream};
 
 use crate::bus::{Bus, Request};
+use crate::dbus::{self, Props, path, sleep_until, take, take_path};
 
 const SERVICE: &str = "network";
 
@@ -206,21 +207,7 @@ fn strongest<'a>(aps: &'a [AccessPoint], ssid: &str) -> Option<&'a AccessPoint> 
         .max_by_key(|ap| ap.strength)
 }
 
-type Props = HashMap<String, OwnedVariant>;
 type Settings = HashMap<String, HashMap<String, OwnedVariant>>;
-
-fn take<T>(props: &mut Props, key: &str) -> Option<T>
-where
-    T: TryFrom<OwnedVariant>,
-{
-    props.remove(key).and_then(|v| T::try_from(v).ok())
-}
-
-fn take_path(props: &mut Props, key: &str) -> String {
-    take::<OwnedObjectPath>(props, key)
-        .map(|p| p.as_str().to_string())
-        .unwrap_or_else(|| "/".into())
-}
 
 fn value<T>(settings: &Settings, group: &str, key: &str) -> Option<T>
 where
@@ -278,10 +265,6 @@ fn new_profile(
     out
 }
 
-fn path(s: &str) -> Result<ObjectPath<'_>> {
-    Ok(ObjectPath::try_from(s)?)
-}
-
 async fn call<B>(
     conn: &Connection,
     path: &str,
@@ -292,9 +275,7 @@ async fn call<B>(
 where
     B: Serialize + Type,
 {
-    conn.call_method(Some(NM), path, Some(iface), method, body)
-        .await
-        .with_context(|| format!("{iface}.{method} on {path}"))
+    dbus::call(conn, NM, path, iface, method, body).await
 }
 
 async fn get_all(conn: &Connection, path: &str, iface: &str) -> Result<Props> {
@@ -441,13 +422,6 @@ pub struct Service {
     needs_password: Option<String>,
 }
 
-async fn sleep_until(at: Option<Instant>) {
-    match at {
-        Some(at) => tokio::time::sleep_until(at).await,
-        None => std::future::pending().await,
-    }
-}
-
 impl Service {
     pub fn new(bus: Bus) -> Self {
         Self {
@@ -481,19 +455,12 @@ impl Service {
     async fn session(&mut self, requests: &mut mpsc::Receiver<Request>) -> Result<()> {
         let conn = Connection::system().await.context("connect system bus")?;
 
-        // Bus-side matches outlive an NM restart; the owner stream reports one.
         let changes = MatchRule::builder()
             .msg_type(MessageType::Signal)
             .path_namespace(NM_PATH)
             .build()?;
-        let owner = MatchRule::builder()
-            .msg_type(MessageType::Signal)
-            .sender("org.freedesktop.DBus")
-            .member("NameOwnerChanged")
-            .arg(0, NM)
-            .build()?;
         let mut changes = MessageStream::for_match_rule(changes, &conn, None).await?;
-        let mut owner = MessageStream::for_match_rule(owner, &conn, None).await?;
+        let mut owner = dbus::owner_changes(&conn, NM).await?;
 
         self.reread(&conn).await;
         let mut due: Option<Instant> = None;
@@ -564,15 +531,7 @@ impl Service {
     }
 
     async fn enable(&mut self, conn: &Connection, on: bool) -> Result<()> {
-        call(
-            conn,
-            NM_PATH,
-            "org.freedesktop.DBus.Properties",
-            "Set",
-            &(NM, "WirelessEnabled", Variant::from(on)),
-        )
-        .await?;
-        Ok(())
+        dbus::set(conn, NM, NM_PATH, NM, "WirelessEnabled", on).await
     }
 
     async fn request_rescan(&mut self, conn: &Connection) {

@@ -1,5 +1,6 @@
 mod bus;
 mod config;
+mod dbus;
 mod services;
 
 use std::collections::HashMap;
@@ -58,6 +59,10 @@ async fn main() -> Result<()> {
     let (network_tx, network_rx) = mpsc::channel(8);
     commands.insert("network", network_tx);
     tokio::spawn(services::network::Service::new(bus.clone()).run(network_rx));
+
+    let (bluetooth_tx, bluetooth_rx) = mpsc::channel(8);
+    commands.insert("bluetooth", bluetooth_tx);
+    tokio::spawn(services::bluetooth::Service::new(bus.clone()).run(bluetooth_rx));
 
     let path = socket_path();
     // Single instance is the unit's job; a leftover socket is never a live peer.
