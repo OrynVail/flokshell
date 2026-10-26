@@ -11,11 +11,11 @@ Singleton {
 
     readonly property UP.UPowerDevice primaryDevice: UP.UPower.displayDevice
 
-    readonly property bool available: primaryDevice !== null && primaryDevice.type === UP.UPowerDevice.Battery
+    readonly property bool available: primaryDevice !== null && primaryDevice.type === UP.UPowerDeviceType.Battery
     readonly property real percentage: available ? (primaryDevice.percentage * 100) : 0
-    readonly property bool isCharging: available && primaryDevice.state === UP.UPowerDevice.Charging
-    readonly property bool isPluggedIn: available && (primaryDevice.state === UP.UPowerDevice.Charging || primaryDevice.state === UP.UPowerDevice.FullyCharged)
-    readonly property int chargeState: available ? primaryDevice.state : UP.UPowerDevice.Unknown
+    readonly property bool isCharging: available && primaryDevice.state === UP.UPowerDeviceState.Charging
+    readonly property bool isPluggedIn: available && (primaryDevice.state === UP.UPowerDeviceState.Charging || primaryDevice.state === UP.UPowerDeviceState.FullyCharged)
+    readonly property int chargeState: available ? primaryDevice.state : UP.UPowerDeviceState.Unknown
     property int lastBatteryAlertThreshold: 0
 
     // Add some helpful descriptive properties if needed
