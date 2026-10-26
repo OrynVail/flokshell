@@ -64,6 +64,11 @@ async fn main() -> Result<()> {
     commands.insert("bluetooth", bluetooth_tx);
     tokio::spawn(services::bluetooth::Service::new(bus.clone()).run(bluetooth_rx));
 
+    // A stop queued behind a watch must not be the one dropped.
+    let (resources_tx, resources_rx) = mpsc::channel(4);
+    commands.insert("resources", resources_tx);
+    tokio::spawn(services::resources::Service::new(bus.clone()).run(resources_rx));
+
     let path = socket_path();
     // Single instance is the unit's job; a leftover socket is never a live peer.
     let _ = std::fs::remove_file(&path);

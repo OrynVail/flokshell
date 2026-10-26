@@ -16,6 +16,7 @@ src/
 └── services/
     ├── bluetooth.rs     # BlueZ: adapter, devices, discovery, connects
     ├── network.rs       # NetworkManager over the system bus: state, scans, connects
+    ├── resources.rs     # CPU, RAM, GPU (NVML, amdgpu sysfs), disks; sampled under a lease
     └── weather.rs       # open-meteo + geocoding + geoip fallback chain
 ```
 

@@ -16,7 +16,7 @@ Backend singletons bridging Wayland protocols, CLI tools (nmcli, upower, wpctl, 
 | **Media** | `MprisController.qml` | MPRIS D-Bus player control |
 | **Cover art** | `CoverArtService.qml` | Resolves artwork via `coverart.py`; falls back to the app icon |
 | **Notifications** | `Notifications.qml` | D-Bus notification server with persistence |
-| **System Monitor** | `SystemResources.qml` | CPU, RAM, GPU, temps via Python script |
+| **System Monitor** | `SystemResources.qml` | CPU, RAM, GPU, disk, temps via flokd |
 | **Compositor** | `AxctlService.qml` | Abstraction layer for compositor IPC (focus, dispatch) |
 | **Visibility** | `Visibilities.qml` | Per-screen UI visibility/layering orchestration |
 | **State** | `StateService.qml` | JSON persistence for session state (tab positions, etc.) |

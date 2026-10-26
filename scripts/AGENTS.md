@@ -6,7 +6,6 @@ Python and Bash backend utilities invoked by QML services via `Quickshell.Io.Pro
 ## WHERE TO LOOK
 | Script | Language | Called By | Role |
 |--------|----------|-----------|------|
-| `system_monitor.py` | Python | `SystemResources.qml` | CPU, RAM, GPU, disk, temperature polling. Outputs JSON to stdout |
 | `clipboard_watch.sh` | Bash | `ClipboardService.qml` | Watches clipboard changes via `wl-paste --watch` |
 | `clipboard_check.sh` | Bash | `ClipboardService.qml` | Validates clipboard state and deduplication |
 | `clipboard_insert.sh` | Bash | `ClipboardService.qml` | Inserts items into clipboard via `wl-copy` |

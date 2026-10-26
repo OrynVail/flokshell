@@ -6,10 +6,6 @@ import qs.config
 import qs.modules.globals
 pragma ComponentBehavior: Bound
 
-/**
- * System resource monitoring service
- * Optimized to be lightweight and avoid waking up dGPUs.
- */
 Singleton {
     id: root
 
@@ -18,7 +14,7 @@ Singleton {
     property string cpuModel: ""
     property int cpuTemp: -1
 
-    // RAM metrics
+    // RAM metrics, in KiB
     property real ramUsage: 0.0
     property real ramTotal: 0
     property real ramUsed: 0
@@ -31,7 +27,7 @@ Singleton {
     property int gpuCount: 0
     property bool gpuDetected: false
     property var gpuTemps: []
-    
+
     // Legacy single GPU properties
     property real gpuUsage: gpuUsages.length > 0 ? gpuUsages[0] : 0.0
     property string gpuVendor: gpuVendors.length > 0 ? gpuVendors[0] : "unknown"
@@ -51,62 +47,102 @@ Singleton {
     property int maxHistoryPoints: 50
     property int totalDataPoints: 0
 
-    // Update interval
     property int updateInterval: 2000
 
-    // Unified monitor process.
-    // Resource-efficient: only runs when dashboard is open.
-    // Optimized GPU polling avoids waking dGPUs.
-    property Process monitorProcess: Process {
-        id: monitorProcess
-        running: GlobalStates.dashboardOpen && GlobalStates.dashboardCurrentTab === 2 && root.validDisks.length > 0
-        
-        command: {
-            let cmd = ["python3", Quickshell.shellDir + "/scripts/system_monitor.py", root.updateInterval.toString()];
-            return cmd.concat(root.validDisks);
-        }
-        
-        stdout: SplitParser {
-            onRead: data => {
-                try {
-                    const stats = JSON.parse(data);
-                    
-                    // Static info (received once at start)
-                    if (stats.static) {
-                        root.cpuModel = stats.static.cpu_model || root.cpuModel;
-                        root.gpuNames = stats.static.gpu_names || [];
-                        root.gpuVendors = stats.static.gpu_vendors || [];
-                        root.gpuCount = stats.static.gpu_count || 0;
-                        root.gpuDetected = root.gpuCount > 0;
-                        root.diskTypes = stats.static.disk_types || {};
-                        return;
-                    }
+    readonly property bool watching: GlobalStates.dashboardOpen && GlobalStates.dashboardCurrentTab === 2 && validDisks.length > 0
+    property real lastSeq: -1
 
-                    // Update metrics
-                    if (stats.cpu) {
-                        root.cpuUsage = stats.cpu.usage;
-                        root.cpuTemp = stats.cpu.temp;
-                    }
-                    
-                    if (stats.ram) {
-                        root.ramUsage = stats.ram.usage;
-                        root.ramTotal = stats.ram.total;
-                        root.ramUsed = stats.ram.used;
-                        root.ramAvailable = stats.ram.available;
-                    }
-                    
-                    if (stats.disk) root.diskUsage = stats.disk.usage;
-                    
-                    if (stats.gpu) {
-                        root.gpuUsages = stats.gpu.usages;
-                        root.gpuTemps = stats.gpu.temps;
-                    }
-                    
-                    root.updateHistory();
+    onWatchingChanged: watching ? watch() : send("stop")
+    onValidDisksChanged: if (watching) watch()
+    onUpdateIntervalChanged: if (watching) watch()
+
+    readonly property string socketPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/run/user/1000") + "/flokd.sock"
+
+    Socket {
+        id: flokd
+        path: root.socketPath
+        connected: true
+
+        parser: SplitParser {
+            splitMarker: "\n"
+            onRead: data => {
+                if (!data)
+                    return;
+                try {
+                    let msg = JSON.parse(data);
+                    if (msg.service === "resources")
+                        root.apply(msg.data);
                 } catch (e) {
-                    console.warn("SystemResources: Failed to parse monitor data: " + e);
+                    console.warn("SystemResources: bad frame:", e);
                 }
             }
+        }
+
+        onConnectionStateChanged: {
+            if (!connected)
+                reconnect.start();
+            else if (root.watching)
+                root.watch();
+        }
+    }
+
+    Timer {
+        id: reconnect
+        interval: 2000
+        repeat: false
+        onTriggered: flokd.connected = true
+    }
+
+    function send(cmd, args) {
+        let msg = {
+            service: "resources",
+            cmd: cmd
+        };
+        if (args !== undefined)
+            msg.args = args;
+        flokd.write(JSON.stringify(msg) + "\n");
+        flokd.flush();
+    }
+
+    function watch() {
+        send("watch", {
+            interval_ms: root.updateInterval,
+            disks: root.validDisks
+        });
+    }
+
+    function apply(d) {
+        root.cpuModel = d.cpu_model;
+        root.cpuUsage = d.cpu_usage;
+        root.cpuTemp = d.cpu_temp_c;
+
+        root.ramTotal = d.ram_total / 1024;
+        root.ramUsed = d.ram_used / 1024;
+        root.ramAvailable = d.ram_available / 1024;
+        root.ramUsage = d.ram_total > 0 ? d.ram_used * 100 / d.ram_total : 0;
+
+        const gpus = d.gpus || [];
+        root.gpuNames = gpus.map(g => g.name);
+        root.gpuVendors = gpus.map(g => g.vendor);
+        root.gpuUsages = gpus.map(g => g.usage);
+        root.gpuTemps = gpus.map(g => g.temp_c);
+        root.gpuCount = gpus.length;
+        root.gpuDetected = gpus.length > 0;
+
+        let usage = {};
+        let types = {};
+        for (const disk of d.disks || []) {
+            usage[disk.mount] = disk.usage;
+            types[disk.mount] = disk.kind;
+        }
+        root.diskUsage = usage;
+        root.diskTypes = types;
+
+        const fresh = root.lastSeq >= 0 && d.seq !== root.lastSeq;
+        root.lastSeq = d.seq;
+        if (fresh && root.watching) {
+            root.updateHistory();
+            root.watch();
         }
     }
 
@@ -119,14 +155,6 @@ Singleton {
 
     property bool configReady: Config.initialLoadComplete
     onConfigReadyChanged: if (configReady) validateDisks()
-
-    onValidDisksChanged: if (monitorProcess.running) restartMonitor()
-    onUpdateIntervalChanged: if (monitorProcess.running) restartMonitor()
-
-    function restartMonitor() {
-        monitorProcess.running = false;
-        Qt.callLater(() => { monitorProcess.running = true; });
-    }
 
     function validateDisks() {
         const configuredDisks = Config.system.disks || ["/"];
@@ -143,8 +171,7 @@ Singleton {
 
     function updateHistory() {
         totalDataPoints++;
-        
-        // Helper to update history arrays
+
         const pushHistory = (arr, val) => {
             let next = arr.slice();
             next.push(val);
@@ -159,15 +186,15 @@ Singleton {
         if (gpuDetected && gpuCount > 0) {
             let newGpuHistories = gpuHistories.slice();
             let newGpuTempHistories = gpuTempHistories.slice();
-            
+
             while (newGpuHistories.length < gpuCount) newGpuHistories.push([]);
             while (newGpuTempHistories.length < gpuCount) newGpuTempHistories.push([]);
-            
+
             for (let i = 0; i < gpuCount; i++) {
                 newGpuHistories[i] = pushHistory(newGpuHistories[i], (gpuUsages[i] || 0) / 100);
                 newGpuTempHistories[i] = pushHistory(newGpuTempHistories[i], (gpuTemps[i] ?? -1));
             }
-            
+
             gpuHistories = newGpuHistories;
             gpuTempHistories = newGpuTempHistories;
         }
