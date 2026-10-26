@@ -13,7 +13,6 @@ with pkgs; [
   libnotify
   matugen
   python3
-  power-profiles-daemon
   slurp
   sqlite
   upower
