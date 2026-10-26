@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
@@ -408,10 +408,10 @@ async fn find_profile(conn: &Connection, ssid: &str) -> Result<Option<String>> {
             continue;
         };
         let settings: Settings = reply.body().deserialize()?;
-        if let Some(used) = profile_for(&settings, ssid) {
-            if best.as_ref().is_none_or(|(b, _)| used > *b) {
-                best = Some((used, p.as_str().to_string()));
-            }
+        if let Some(used) = profile_for(&settings, ssid)
+            && best.as_ref().is_none_or(|(b, _)| used > *b)
+        {
+            best = Some((used, p.as_str().to_string()));
         }
     }
     Ok(best.map(|(_, p)| p))
@@ -579,11 +579,11 @@ impl Service {
         if self.scan.in_flight.is_some() || self.scan.queued_until.is_some() {
             return;
         }
-        if let Some(last) = self.scan.last_request {
-            if last.elapsed() < SCAN_COOLDOWN {
-                self.scan.queued_until = Some(last + SCAN_COOLDOWN);
-                return;
-            }
+        if let Some(last) = self.scan.last_request
+            && last.elapsed() < SCAN_COOLDOWN
+        {
+            self.scan.queued_until = Some(last + SCAN_COOLDOWN);
+            return;
         }
         self.rescan(conn).await;
     }
@@ -703,10 +703,10 @@ impl Service {
                 } else {
                     tracing::warn!(ssid = %p.ssid, reason, "connect failed");
                 }
-                if let Some(profile) = p.created {
-                    if let Err(e) = call(conn, &profile, PROFILE, "Delete", &()).await {
-                        tracing::warn!("{e:#}");
-                    }
+                if let Some(profile) = p.created
+                    && let Err(e) = call(conn, &profile, PROFILE, "Delete", &()).await
+                {
+                    tracing::warn!("{e:#}");
                 }
             }
             _ => return,
