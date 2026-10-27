@@ -1,6 +1,7 @@
 mod bus;
 mod config;
 mod dbus;
+mod ddc;
 mod services;
 
 use std::collections::HashMap;
@@ -68,6 +69,11 @@ async fn main() -> Result<()> {
     let (resources_tx, resources_rx) = mpsc::channel(4);
     commands.insert("resources", resources_tx);
     tokio::spawn(services::resources::Service::new(bus.clone()).run(resources_rx));
+
+    // Room for a whole drag: a dropped set could be its last value.
+    let (brightness_tx, brightness_rx) = mpsc::channel(64);
+    commands.insert("brightness", brightness_tx);
+    tokio::spawn(services::brightness::Service::new(bus.clone()).run(brightness_rx));
 
     let path = socket_path();
     // Single instance is the unit's job; a leftover socket is never a live peer.

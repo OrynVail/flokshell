@@ -415,7 +415,7 @@ brightness)
 		MONITOR="${ARG3:-}"
 		if [ -z "$MONITOR" ]; then
 			# Save all monitors
-			bash "${SCRIPT_DIR}/scripts/brightness_list.sh" >"${BRIGHTNESS_SAVE_FILE}.tmp" 2>/dev/null || {
+			qs ipc --pid "$PID" call brightness list >"${BRIGHTNESS_SAVE_FILE}.tmp" 2>/dev/null || {
 				echo "Warning: Could not query current brightness"
 			}
 			if [ -f "${BRIGHTNESS_SAVE_FILE}.tmp" ]; then
@@ -429,7 +429,7 @@ brightness)
 			fi
 		else
 			# Save specific monitor
-			CURRENT_LINE=$(bash "${SCRIPT_DIR}/scripts/brightness_list.sh" 2>/dev/null | grep "^${MONITOR}:")
+			CURRENT_LINE=$(qs ipc --pid "$PID" call brightness list 2>/dev/null | grep "^${MONITOR}:")
 			if [ -z "$CURRENT_LINE" ]; then
 				echo "Error: Monitor $MONITOR not found"
 				exit 1
@@ -483,7 +483,7 @@ brightness)
 		if [ -z "$MONITOR" ]; then
 			# Save all monitors - we need to get current brightness
 			# For simplicity, we'll use a helper script to query current brightness
-			bash "${SCRIPT_DIR}/scripts/brightness_list.sh" >"${BRIGHTNESS_SAVE_FILE}.tmp" 2>/dev/null || {
+			qs ipc --pid "$PID" call brightness list >"${BRIGHTNESS_SAVE_FILE}.tmp" 2>/dev/null || {
 				echo "Warning: Could not query current brightness"
 			}
 			# Convert format from name:brightness:method to name:brightness
@@ -498,7 +498,7 @@ brightness)
 			fi
 		else
 			# Save specific monitor
-			CURRENT_LINE=$(bash "${SCRIPT_DIR}/scripts/brightness_list.sh" 2>/dev/null | grep "^${MONITOR}:")
+			CURRENT_LINE=$(qs ipc --pid "$PID" call brightness list 2>/dev/null | grep "^${MONITOR}:")
 			if [ -z "$CURRENT_LINE" ]; then
 				echo "Error: Monitor $MONITOR not found"
 				exit 1

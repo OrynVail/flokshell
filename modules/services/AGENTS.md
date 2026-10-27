@@ -10,7 +10,7 @@ Backend singletons bridging Wayland protocols, CLI tools (nmcli, upower, wpctl, 
 | **Network/WiFi** | `NetworkService.qml` | `nmcli` wrapper. WiFi scanning, connection, status |
 | **Battery/Power** | `Battery.qml` | UPower integration. Percentage, charging state, time remaining |
 | **Bluetooth** | `BluetoothService.qml` | Device listing, connect/disconnect |
-| **Brightness** | `Brightness.qml` | Per-monitor brightness via `brightnessctl` |
+| **Brightness** | `Brightness.qml` | Per-monitor brightness via flokd: backlight and DDC/CI |
 | **Compositor** | `AxctlService.qml` | Spawns the `axctl` daemon and subscribes to its event stream |
 | **Clipboard** | `ClipboardService.qml` | Persistent clipboard via `clipboard.db` + helper scripts |
 | **Media** | `MprisController.qml` | MPRIS D-Bus player control |

@@ -13,8 +13,10 @@ src/
 ├── bus.rs               # latest-state-per-service + broadcast to clients
 ├── config.rs            # reads ~/.config/flokshell/config/*.json, watches for changes
 ├── dbus.rs              # shared system-bus helpers: calls, property reads, owner watch
+├── ddc.rs               # DDC/CI over i2c-dev: EDID, VCP get/set
 └── services/
     ├── bluetooth.rs     # BlueZ: adapter, devices, discovery, connects
+    ├── brightness.rs    # backlight through logind, external displays over DDC/CI
     ├── network.rs       # NetworkManager over the system bus: state, scans, connects
     ├── resources.rs     # CPU, RAM, GPU (NVML, amdgpu sysfs), disks; sampled under a lease
     └── weather.rs       # open-meteo + geocoding + geoip fallback chain

@@ -56,6 +56,8 @@ in {
 
     # Enable recommended services for full functionality
     services.upower.enable = lib.mkDefault true;
+    # i2c group and udev rule; DDC brightness needs the user in that group.
+    hardware.i2c.enable = lib.mkDefault true;
     services.power-profiles-daemon.enable = lib.mkDefault true;
     programs.gpu-screen-recorder.enable = lib.mkDefault true;
     networking.networkmanager.enable = lib.mkDefault true;

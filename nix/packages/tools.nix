@@ -2,8 +2,6 @@
 { pkgs }:
 
 with pkgs; [
-  brightnessctl
-  ddcutil
   fontconfig
   glib
   grim

@@ -43,8 +43,6 @@ declare -A BINARY_CHECK=(
   ["kitty"]="kitty"
   ["tmux"]="tmux"
   ["fuzzel"]="fuzzel"
-  ["brightnessctl"]="brightnessctl"
-  ["ddcutil"]="ddcutil"
   ["grim"]="grim"
   ["slurp"]="slurp"
   ["jq"]="jq"
@@ -96,7 +94,6 @@ install_dependencies() {
   case "$DISTRO" in
   nixos)
     local FLAKE_URI="${1:-github:OrynVail/flokshell}"
-    nix profile list | grep -q "ddcutil" && nix profile remove ddcutil 2>/dev/null || true
 
     if nix profile list | grep -q "Flokshell"; then
       log_info "Updating Flokshell..."
@@ -121,7 +118,7 @@ install_dependencies() {
       qt6-qtbase qt6-qtdeclarative qt6-qtwayland qt6-qtsvg qt6-qttools
       qt6-qtimageformats qt6-qtmultimedia qt6-qtshadertools
       kf6-syntax-highlighting kf6-breeze-icons hicolor-icon-theme
-      brightnessctl ddcutil fontconfig grim slurp ImageMagick jq sqlite upower
+      fontconfig grim slurp ImageMagick jq sqlite upower
       wl-clipboard wlsunset wtype zbar glib2 pipx zenity power-profiles-daemon
       python3.12 libnotify flatpak
       tesseract tesseract-langpack-eng tesseract-langpack-spa tesseract-langpack-jpn
@@ -168,7 +165,7 @@ install_dependencies() {
       pipewire wireplumber pavucontrol easyeffects ffmpeg x264 playerctl
       qt6-base qt6-declarative qt6-wayland qt6-svg qt6-tools qt6-imageformats qt6-multimedia qt6-shadertools
       libwebp libavif syntax-highlighting breeze-icons hicolor-icon-theme
-      brightnessctl ddcutil fontconfig grim slurp imagemagick jq sqlite upower
+      fontconfig grim slurp imagemagick jq sqlite upower
       wl-clipboard wlsunset wtype zbar glib2 python-pipx zenity inetutils power-profiles-daemon
       python312 libnotify
       tesseract tesseract-data-eng tesseract-data-spa tesseract-data-jpn
