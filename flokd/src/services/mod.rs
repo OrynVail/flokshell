@@ -1,5 +1,6 @@
 pub mod bluetooth;
 pub mod brightness;
+pub mod capture;
 pub mod coverart;
 pub mod idle;
 pub mod linkpreview;

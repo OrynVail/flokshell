@@ -31,7 +31,8 @@ you want both a `daemon` and a `subscribe`.
 Driving it without touching the UI:
 ```bash
 echo dashboard > /tmp/flokshell_ipc.pipe    # toggles; see GlobalShortcuts.run()
-grim -o <output> shot.png                # multi-monitor: pass the output name
+echo '{"service":"capture","cmd":"freeze"}' | socat - UNIX-CONNECT:$XDG_RUNTIME_DIR/flokd.sock
+                                         # every output → /tmp/flokshell_freeze_<output>.png
 ```
 
 ## STRUCTURE
@@ -69,7 +70,7 @@ widgets live on inside the notch and everything imports `qs.modules.bar.*`.
 The service layer is being moved into `flokd`, a Rust daemon that owns fetching, parsing
 and system integration so QML is left with the rendering. A ported service keeps its
 singleton in `modules/services/` with the same property names and becomes a socket client,
-so nothing downstream changes. Ported so far: `WeatherService`, `NetworkService`, `BluetoothService`, `SystemResources`, `Brightness`, `CoverArtService`, and the thumbnail and link-preview fetchers. New clients use `FlokdSocket`.
+so nothing downstream changes. Ported so far: `WeatherService`, `NetworkService`, `BluetoothService`, `SystemResources`, `Brightness`, `CoverArtService`, `NightLightService`, `IdleService`, `CaffeineService`, `Screenshot` (capture, OCR, QR, Lens, colour picker), and the thumbnail and link-preview fetchers. New clients use `FlokdSocket`.
 
 ## WHERE TO LOOK
 | Task | Location |

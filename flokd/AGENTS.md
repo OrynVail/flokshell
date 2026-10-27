@@ -15,12 +15,17 @@ src/
 ├── dbus.rs              # shared system-bus helpers: calls, property reads, owner watch
 ├── ddc.rs               # DDC/CI over i2c-dev: EDID, VCP get/set
 ├── http.rs              # shared client builder, size-capped GET
+├── notify.rs            # desktop notifications and their action clicks, session bus
+├── wayland.rs           # one compositor connection: outputs, gamma, idle, screencopy; reconnects
 └── services/
     ├── bluetooth.rs     # BlueZ: adapter, devices, discovery, connects
     ├── brightness.rs    # backlight through logind, external displays over DDC/CI
+    ├── capture.rs       # frozen frames in memory: save, OCR, QR, Lens, colour pick
     ├── coverart.rs      # MPRIS art: URL, tags, sidecar, online; content-addressed cache
+    ├── idle.rs          # idle listeners, caffeine, logind lock and sleep hooks with a delay lock
     ├── linkpreview.rs   # Open Graph scrape, YouTube and X oEmbed
     ├── network.rs       # NetworkManager over the system bus: state, scans, connects
+    ├── nightlight.rs    # wlr-gamma-control at a fixed 4500 K
     ├── resources.rs     # CPU, RAM, GPU (NVML, amdgpu sysfs), disks; sampled under a lease
     ├── thumbs.rs        # wallpaper/desktop thumbnails, lockscreen frame; ffmpeg for video only
     └── weather.rs       # open-meteo + geocoding + geoip fallback chain

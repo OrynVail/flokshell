@@ -93,18 +93,6 @@ ActionGrid {
     ], utilityGroup) : captureGroup.concat(recordGroup, utilityGroup)
 
     Process {
-        id: colorPickerProc
-    }
-
-    Process {
-        id: ocrProc
-    }
-
-    Process {
-        id: qrProc
-    }
-
-    Process {
         id: openFolderProc
         // nohup so the viewer outlives the menu
         command: ["bash", "-c", "nohup xdg-open \"$0\" > /dev/null 2>&1 &"]
@@ -125,12 +113,7 @@ ActionGrid {
             ScreenRecorder.toggleRecording();
             root.itemSelected();
         } else if (action.tooltip === "Open Screenshots") {
-            // xdg-user-dir so it respects system paths
-            var cmd = "dir=\"$(xdg-user-dir PICTURES)/Screenshots\"; mkdir -p \"$dir\"; nohup xdg-open \"$dir\" > /dev/null 2>&1 &";
-            
-            openFolderProc.command = ["bash", "-c", cmd];
-            openFolderProc.running = true;
-            
+            Screenshot.openScreenshotsFolder();
             root.itemSelected();
         } else if (action.tooltip === "Open Recordings") {
             var cmd = "dir=\"$(xdg-user-dir VIDEOS)/Recordings\"; mkdir -p \"$dir\"; nohup xdg-open \"$dir\" > /dev/null 2>&1 &";
@@ -140,13 +123,10 @@ ActionGrid {
             
              root.itemSelected();
         } else if (action.tooltip === "Color Picker") {
-            var scriptPath = Qt.resolvedUrl("../../../scripts/colorpicker.py").toString().replace("file://", "");
-            // Run detached so it survives when the menu closes
-            colorPickerProc.command = ["bash", "-c", "nohup python3 \"" + scriptPath + "\" > /dev/null 2>&1 &"];
-            colorPickerProc.running = true;
+            Screenshot.captureMode = "color";
+            GlobalStates.screenshotToolVisible = true;
             root.itemSelected();
         } else if (action.tooltip === "OCR") {
-            var scriptPath = Qt.resolvedUrl("../../../scripts/ocr.sh").toString().replace("file://", "");
             
             // Build languages string from Config
             var ocrConfig = Config.system.ocr;
@@ -167,13 +147,11 @@ ActionGrid {
             if (langs.length === 0) langs.push("eng");
             var langString = langs.join("+");
 
-            ocrProc.command = ["bash", "-c", "nohup \"" + scriptPath + "\" \"" + langString + "\" > /dev/null 2>&1 &"];
-            ocrProc.running = true;
+            Screenshot.startOcr(langString);
             root.itemSelected();
         } else if (action.tooltip === "QR Code") {
-            var scriptPath = Qt.resolvedUrl("../../../scripts/qr_scan.sh").toString().replace("file://", "");
-            qrProc.command = ["bash", "-c", "nohup \"" + scriptPath + "\" > /dev/null 2>&1 &"];
-            qrProc.running = true;
+            Screenshot.captureMode = "qr";
+            GlobalStates.screenshotToolVisible = true;
             root.itemSelected();
         } else if (action.tooltip === "Google Lens") {
             Screenshot.captureMode = "lens";

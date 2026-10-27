@@ -107,6 +107,7 @@ PanelWindow {
     function close() {
         screenshotPopup.state = "idle";
         GlobalStates.screenshotToolVisible = false;
+        Screenshot.release();
     }
 
     function executeCapture() {
@@ -191,6 +192,8 @@ PanelWindow {
             Image {
                 mipmap: true
                 id: previewImage
+                // Every freeze reuses the same path.
+                cache: false
                 // Now we display a monitor-specific image which exactly matches our bounds
                 fillMode: Image.Stretch
                 anchors.fill: parent
@@ -301,6 +304,12 @@ PanelWindow {
             onReleased: {
                 if (!selecting) return;
                 selecting = false;
+
+                if (Screenshot.captureMode === "color") {
+                    Screenshot.pickColor(startPointGlobal.x, startPointGlobal.y);
+                    close();
+                    return;
+                }
                 
                 if (Screenshot.selectionW > 5 && Screenshot.selectionH > 5) {
                     Screenshot.processRegion(Screenshot.selectionX, Screenshot.selectionY, Screenshot.selectionW, Screenshot.selectionH);

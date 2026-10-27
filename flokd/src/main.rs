@@ -3,6 +3,7 @@ mod config;
 mod dbus;
 mod ddc;
 mod http;
+mod notify;
 mod services;
 mod wayland;
 
@@ -110,7 +111,15 @@ async fn main() -> Result<()> {
     );
     commands.insert("idle", idle_tx);
     tokio::spawn(
-        services::idle::Service::new(bus.clone(), wl, notes.subscribe()).run(idle_rx),
+        services::idle::Service::new(bus.clone(), wl.clone(), notes.subscribe()).run(idle_rx),
+    );
+
+    let (capture_tx, capture_rx) = mpsc::channel(4);
+    commands.insert("capture", capture_tx);
+    tokio::spawn(
+        services::capture::Service::new(bus.clone(), wl)
+            .context("capture service")?
+            .run(capture_rx),
     );
 
     let path = socket_path();
