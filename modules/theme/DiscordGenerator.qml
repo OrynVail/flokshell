@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs.modules.services
 import qs.config
 
 QtObject {
@@ -81,19 +82,8 @@ QtObject {
         const home = Quickshell.env("HOME")
         const vesktopPath = home + "/.config/vesktop/themes/flokshell.css"
         
-        const escape = (str) => {
-            if (!str) return ""
-            return str.toString()
-                .replace(/\\/g, "\\\\")
-                .replace(/"/g, '\\"')
-                .replace(/\$/g, '\\$')
-                .replace(/`/g, '\\`');
-        }
 
-        const cmd = `mkdir -p "$(dirname "${vesktopPath}")" && echo "${escape(css)}" > "${vesktopPath}"`
-        
-        writerProcess.command = ["sh", "-c", cmd]
-        writerProcess.running = true
+        FileWriter.write(vesktopPath, css + "\n")
     }
 
     property QtObject writer: QtObject {

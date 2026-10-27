@@ -32,14 +32,39 @@ const MANIFEST: &str = ".manifest.json";
 pub struct State {
     // Bumped when a wallpaper batch lands; the shell reloads its thumbnails on it.
     wallpapers: u64,
+    scan: Scan,
+}
+
+#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
+pub struct Scan {
+    dir: String,
+    // The configured folder held nothing, so these are the bundled examples.
+    fallback: bool,
+    files: Vec<String>,
+    // Top-level subfolders, the wallpaper tab's filters.
+    folders: Vec<String>,
 }
 
 #[derive(Deserialize, Debug, PartialEq)]
 #[serde(tag = "cmd", content = "args", rename_all = "lowercase")]
 enum Command {
-    Wallpapers { dir: String, cache: String },
-    Desktop { dir: String, cache: String },
-    Lockframe { path: String, cache: String },
+    Scan {
+        dir: String,
+        fallback: String,
+        cache: String,
+    },
+    Wallpapers {
+        dir: String,
+        cache: String,
+    },
+    Desktop {
+        dir: String,
+        cache: String,
+    },
+    Lockframe {
+        path: String,
+        cache: String,
+    },
 }
 
 impl TryFrom<Request> for Command {
@@ -96,8 +121,40 @@ impl Service {
 
     pub async fn run(self, mut requests: mpsc::Receiver<Request>) {
         self.publish();
-        while let Some(req) = requests.recv().await {
+        let mut watched: Option<Watched> = None;
+        let (changed_tx, mut changed) = mpsc::unbounded_channel();
+        loop {
+            let req = tokio::select! {
+                Some(req) = requests.recv() => req,
+                Some(()) = changed.recv() => {
+                    // A copy or an unpack lands as a burst; wait for it to settle.
+                    while tokio::time::timeout(SETTLE, changed.recv()).await.is_ok() {}
+                    if let Some(w) = &watched {
+                        self.rescan(w);
+                    }
+                    continue;
+                }
+                else => return,
+            };
             match Command::try_from(req) {
+                Ok(Command::Scan {
+                    dir,
+                    fallback,
+                    cache,
+                }) => {
+                    let w = Watched {
+                        dir: PathBuf::from(&dir),
+                        fallback: PathBuf::from(fallback),
+                        cache: PathBuf::from(cache),
+                        _watcher: watch(Path::new(&dir), changed_tx.clone())
+                            .inspect_err(|e| {
+                                tracing::warn!(dir, "wallpaper folder unwatched: {e:#}")
+                            })
+                            .ok(),
+                    };
+                    self.rescan(&w);
+                    watched = Some(w);
+                }
                 Ok(Command::Wallpapers { dir, cache }) => {
                     let (lock, bus, state) = (
                         self.wallpapers.clone(),
@@ -144,6 +201,43 @@ impl Service {
         }
     }
 
+    fn rescan(&self, w: &Watched) {
+        let (dir, fallback, cache) = (w.dir.clone(), w.fallback.clone(), w.cache.clone());
+        let (lock, bus, state) = (
+            self.wallpapers.clone(),
+            self.bus.clone(),
+            self.state.clone(),
+        );
+        tokio::spawn(async move {
+            let scan = match tokio::task::spawn_blocking(move || scan(&dir, &fallback)).await {
+                Ok(s) => s,
+                Err(e) => {
+                    tracing::error!("scan panicked: {e}");
+                    return;
+                }
+            };
+            let used = PathBuf::from(&scan.dir);
+            let snapshot = {
+                let mut s = state.lock().unwrap();
+                s.scan = scan;
+                s.clone()
+            };
+            publish(&bus, &snapshot);
+
+            let _held = lock.lock().await;
+            match wallpapers(&used, &cache.join("thumbnails")).await {
+                Ok(n) => tracing::info!(built = n, "wallpaper thumbnails"),
+                Err(e) => tracing::warn!("wallpaper thumbnails: {e:#}"),
+            }
+            let snapshot = {
+                let mut s = state.lock().unwrap();
+                s.wallpapers += 1;
+                s.clone()
+            };
+            publish(&bus, &snapshot);
+        });
+    }
+
     fn publish(&self) {
         let snapshot = self.state.lock().unwrap().clone();
         publish(&self.bus, &snapshot);
@@ -154,6 +248,67 @@ fn publish(bus: &Bus, state: &State) {
     match serde_json::to_value(state) {
         Ok(v) => bus.publish(SERVICE, &v),
         Err(e) => tracing::error!("serialise failed: {e}"),
+    }
+}
+
+const SETTLE: Duration = Duration::from_millis(500);
+
+struct Watched {
+    dir: PathBuf,
+    fallback: PathBuf,
+    cache: PathBuf,
+    // Dropping it stops the watch, so it lives as long as this scan target.
+    _watcher: Option<notify::RecommendedWatcher>,
+}
+
+fn watch(dir: &Path, tx: mpsc::UnboundedSender<()>) -> Result<notify::RecommendedWatcher> {
+    use notify::{EventKind, RecursiveMode, Watcher};
+    let mut w = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+        if let Ok(e) = res
+            && !matches!(e.kind, EventKind::Access(_))
+        {
+            let _ = tx.send(());
+        }
+    })?;
+    w.watch(dir, RecursiveMode::Recursive)?;
+    Ok(w)
+}
+
+fn scan(dir: &Path, fallback: &Path) -> Scan {
+    let list = |d: &Path| {
+        let mut files = Vec::new();
+        walk(d, &mut files);
+        let mut files: Vec<String> = files
+            .into_iter()
+            .filter_map(|p| p.to_str().map(str::to_string))
+            .collect();
+        files.sort();
+        files
+    };
+    let files = list(dir);
+    if files.is_empty() && dir != fallback {
+        return Scan {
+            dir: fallback.to_string_lossy().into_owned(),
+            fallback: true,
+            files: list(fallback),
+            folders: Vec::new(),
+        };
+    }
+    let mut folders: Vec<String> = std::fs::read_dir(dir)
+        .map(|entries| {
+            entries
+                .flatten()
+                .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()) && !hidden(&e.path()))
+                .filter_map(|e| e.file_name().into_string().ok())
+                .collect()
+        })
+        .unwrap_or_default();
+    folders.sort();
+    Scan {
+        dir: dir.to_string_lossy().into_owned(),
+        fallback: false,
+        files,
+        folders,
     }
 }
 
@@ -535,6 +690,41 @@ mod tests {
         // a.png has a thumbnail but no manifest row, so it is rebuilt once.
         assert_eq!(dsts, ["a.png.jpg", "sub/b.mp4.jpg"]);
         assert!(!root.join("gone").exists());
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn scan_lists_media_and_folders_or_falls_back() {
+        let base = std::env::temp_dir().join(format!("flokd-scan-{}", std::process::id()));
+        let (walls, example, empty) =
+            (base.join("walls"), base.join("example"), base.join("empty"));
+        for d in [
+            walls.join("cats"),
+            walls.join(".git"),
+            example.clone(),
+            empty.clone(),
+        ] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+        std::fs::write(walls.join("b.PNG"), b"x").unwrap();
+        std::fs::write(walls.join("cats/a.mp4"), b"x").unwrap();
+        std::fs::write(walls.join(".git/x.png"), b"x").unwrap();
+        std::fs::write(walls.join("readme.md"), b"x").unwrap();
+        std::fs::write(example.join("e.jpg"), b"x").unwrap();
+
+        let s = scan(&walls, &example);
+        assert!(!s.fallback);
+        assert_eq!(s.folders, ["cats"]);
+        let names: Vec<_> = s
+            .files
+            .iter()
+            .map(|f| f.rsplit('/').next().unwrap())
+            .collect();
+        assert_eq!(names, ["b.PNG", "a.mp4"]);
+
+        let s = scan(&empty, &example);
+        assert!(s.fallback);
+        assert!(s.files[0].ends_with("e.jpg"));
         let _ = std::fs::remove_dir_all(base);
     }
 

@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs.modules.services
 
 QtObject {
     id: root
@@ -114,15 +115,7 @@ QtObject {
         const targetPath = home + "/.cache/wal/base46-dark.lua"
         
         // Use HEREDOC to handle special characters and newlines correctly
-        const cmd = `
-            mkdir -p "$(dirname "${targetPath}")"
-            cat <<'EOF_NVCHAD' > "${targetPath}"
-${lua}
-EOF_NVCHAD
-        `
-
-        writerProcess.command = ["sh", "-c", cmd]
-        writerProcess.running = true
+        FileWriter.write(targetPath, lua + "\n")
     }
 
     property QtObject writer: QtObject {

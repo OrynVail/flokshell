@@ -56,52 +56,18 @@ Singleton {
     onValidDisksChanged: if (watching) watch()
     onUpdateIntervalChanged: if (watching) watch()
 
-    readonly property string socketPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/run/user/1000") + "/flokd.sock"
-
-    Socket {
+    FlokdSocket {
         id: flokd
-        path: root.socketPath
-        connected: true
-
-        parser: SplitParser {
-            splitMarker: "\n"
-            onRead: data => {
-                if (!data)
-                    return;
-                try {
-                    let msg = JSON.parse(data);
-                    if (msg.service === "resources")
-                        root.apply(msg.data);
-                } catch (e) {
-                    console.warn("SystemResources: bad frame:", e);
-                }
-            }
-        }
-
+        service: "resources"
+        onMessage: d => root.apply(d)
         onConnectionStateChanged: {
-            if (!connected)
-                reconnect.start();
-            else if (root.watching)
+            if (connected && root.watching)
                 root.watch();
         }
     }
 
-    Timer {
-        id: reconnect
-        interval: 2000
-        repeat: false
-        onTriggered: flokd.connected = true
-    }
-
     function send(cmd, args) {
-        let msg = {
-            service: "resources",
-            cmd: cmd
-        };
-        if (args !== undefined)
-            msg.args = args;
-        flokd.write(JSON.stringify(msg) + "\n");
-        flokd.flush();
+        flokd.send(cmd, args);
     }
 
     function watch() {

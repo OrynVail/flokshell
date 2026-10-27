@@ -37,13 +37,11 @@ Singleton {
     property var iconPositions: ({})
 
     function savePositions() {
-        var json = JSON.stringify(iconPositions, null, 2);
-        savePositionsProcess.command = ["sh", "-c", "echo '" + json.replace(/'/g, "'\\''") + "' > " + positionsFile];
-        savePositionsProcess.running = true;
+        positionsStore.setText(JSON.stringify(iconPositions, null, 2));
     }
 
     function loadPositions() {
-        loadPositionsProcess.running = true;
+        positionsStore.path = positionsFile;
     }
 
     function updateIconPosition(path, gridX, gridY) {
@@ -95,7 +93,11 @@ Singleton {
     }
 
     function getDesktopDir() {
-        getDesktopDirProcess.running = true;
+        root.desktopDir = Quickshell.env("XDG_DESKTOP_DIR") || Quickshell.env("HOME") + "/Desktop";
+        loadPositions();
+        scanDesktop();
+        directoryWatcher.path = root.desktopDir;
+        directoryWatcher.reload();
     }
 
     function generateThumbnails() {
@@ -140,37 +142,14 @@ Singleton {
     }
 
     function trashFile(filePath) {
-        var escapedPath = filePath.replace(/'/g, "'\\''");
-        var processComponent = Qt.createQmlObject('
-            import Quickshell
-            import Quickshell.Io
-            Process {
-                running: true
-                command: ["bash", "-c", "gio trash \'' + escapedPath + '\'"]
-
-                stdout: StdioCollector {
-                    onStreamFinished: {
-                        if (text.length > 0) {
-                            console.log("File moved to trash:", text);
-                        }
-                    }
-                }
-
-                stderr: StdioCollector {
-                    onStreamFinished: {
-                        if (text.length > 0) {
-                            console.warn("Error moving file to trash:", text);
-                        }
-                    }
-                }
-
-                onRunningChanged: {
-                    if (!running) {
-                        destroy();
-                    }
-                }
-            }
-        ', root);
+        const proc = Qt.createQmlObject('import Quickshell.Io; Process {}', root);
+        proc.command = ["gio", "trash", filePath];
+        proc.exited.connect(code => {
+            if (code !== 0)
+                console.warn("Error moving file to trash:", filePath);
+            proc.destroy();
+        });
+        proc.running = true;
     }
 
     function saveAllPositions() {
@@ -287,74 +266,26 @@ Singleton {
         Qt.callLater(() => getDesktopDir());
     }
 
-    Process {
-        id: savePositionsProcess
-        running: false
-        command: []
-
-        stderr: StdioCollector {
-            onStreamFinished: {
-                if (text.length > 0) {
-                    console.warn("Error saving positions:", text);
-                }
+    FileView {
+        id: positionsStore
+        path: ""
+        printErrors: false
+        onLoaded: {
+            try {
+                const parsed = JSON.parse(text());
+                for (const key in root.iconPositions)
+                    delete root.iconPositions[key];
+                for (const k in parsed)
+                    root.iconPositions[k] = {
+                        x: parsed[k].x,
+                        y: parsed[k].y
+                    };
+            } catch (e) {
+                console.warn("Error parsing positions file:", e);
             }
+            root.positionsLoaded = true;
         }
-    }
-
-    Process {
-        id: loadPositionsProcess
-        running: false
-        command: ["cat", positionsFile]
-
-        stdout: StdioCollector {
-            onStreamFinished: {
-                if (text.trim().length > 0) {
-                    try {
-                        var parsed = JSON.parse(text);
-
-                        for (var key in root.iconPositions) {
-                            delete root.iconPositions[key];
-                        }
-
-                        for (var k in parsed) {
-                            root.iconPositions[k] = {
-                                x: parsed[k].x,
-                                y: parsed[k].y
-                            };
-                        }
-
-                        console.log("Loaded", Object.keys(root.iconPositions).length, "icon positions");
-                    } catch (e) {
-                        console.warn("Error parsing positions file:", e);
-                    }
-                }
-                root.positionsLoaded = true;
-            }
-        }
-
-        stderr: StdioCollector {
-            onStreamFinished: {
-                root.positionsLoaded = true;
-            }
-        }
-    }
-
-    Process {
-        id: getDesktopDirProcess
-        running: false
-        command: ["sh", "-c", "echo ${XDG_DESKTOP_DIR:-$HOME/Desktop}"]
-
-        stdout: StdioCollector {
-            onStreamFinished: {
-                root.desktopDir = text.trim();
-                console.log("Desktop directory:", root.desktopDir);
-                console.log("Positions file:", root.positionsFile);
-                loadPositions();
-                scanDesktop();
-                directoryWatcher.path = root.desktopDir;
-                directoryWatcher.reload();
-            }
-        }
+        onLoadFailed: root.positionsLoaded = true
     }
 
     FileView {
@@ -373,7 +304,7 @@ Singleton {
     Process {
         id: scanProcess
         running: false
-        command: ["sh", "-c", "ls -1ap " + root.desktopDir + " | grep -v '^\\.$' | grep -v '^\\.\\.$'"]
+        command: ["ls", "-1ap", root.desktopDir]
 
         stdout: StdioCollector {
             onStreamFinished: {

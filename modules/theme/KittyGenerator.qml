@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs.modules.services
 import qs.config
 
 QtObject {
@@ -103,14 +104,12 @@ QtObject {
         const kittyConfPath = Quickshell.env("HOME") + "/.cache/flokshell/kitty.conf";
 
         // Ensure directory exists and write file
-        const cmd = `
-            mkdir -p "$(dirname "${kittyConfPath}")" && \\
-            echo "${conf}" > "${kittyConfPath}" && \\
-            pkill -SIGUSR1 kitty
-        `;
-
-        writerProcess.command = ["sh", "-c", cmd];
-        writerProcess.running = true;
+        FileWriter.write(kittyConfPath, conf + "\n", ok => {
+            if (!ok)
+                return;
+            writerProcess.command = ["pkill", "-SIGUSR1", "kitty"];
+            writerProcess.running = true;
+        });
     }
 
     property QtObject writer: QtObject {

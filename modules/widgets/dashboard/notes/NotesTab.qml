@@ -668,8 +668,10 @@ Item {
         createNoteProcess.noteId = noteId;
         createNoteProcess.noteTitle = noteTitle;
         createNoteProcess.noteIsMarkdown = isMarkdown || false;
-        createNoteProcess.command = ["sh", "-c", "mkdir -p '" + notesPath + "' && printf '%s' '" + initialContent.replace(/'/g, "'\\''") + "' > '" + notesPath + "/" + noteId + extension + "'"];
-        createNoteProcess.running = true;
+        FileWriter.write(notesPath + "/" + noteId + extension, initialContent, ok => {
+            if (ok)
+                createNoteProcess.created();
+        });
     }
 
     function loadNoteContent(noteId) {
@@ -707,8 +709,7 @@ Item {
 
         // Get the text content
         var content = currentNoteIsMarkdown ? mdEditor.text : noteEditor.text;
-        saveNoteProcess.command = ["sh", "-c", "printf '%s' '" + content.replace(/'/g, "'\\''") + "' > '" + notesPath + "/" + currentNoteId + extension + "'"];
-        saveNoteProcess.running = true;
+        FileWriter.write(notesPath + "/" + currentNoteId + extension, content);
         editorDirty = false;
 
         // Update modified timestamp
@@ -820,8 +821,7 @@ Item {
             };
         }
         var jsonContent = NotesUtils.serializeIndex(indexData);
-        saveIndexProcess.command = ["sh", "-c", "printf '%s' '" + jsonContent.replace(/'/g, "'\\''") + "' > '" + indexPath + "'"];
-        saveIndexProcess.running = true;
+        FileWriter.write(indexPath, jsonContent);
     }
 
     Component.onCompleted: {
@@ -875,14 +875,14 @@ Item {
     }
 
     // Create note
-    Process {
+    QtObject {
         id: createNoteProcess
         property string noteId: ""
         property string noteTitle: ""
         property bool noteIsMarkdown: false
 
-        onExited: code => {
-            if (code === 0) {
+        function created() {
+            {
                 // Add to allNotes and save index
                 var newNote = {
                     id: noteId,
@@ -964,18 +964,6 @@ Item {
         }
     }
 
-    // Save note content
-    Process {
-        id: saveNoteProcess
-        onExited: code => {}
-    }
-
-    // Save index
-    Process {
-        id: saveIndexProcess
-        onExited: code => {}
-    }
-
     // Read index for title update
     Process {
         id: readIndexForUpdateProcess
@@ -1005,8 +993,7 @@ Item {
             }
 
             var jsonContent = NotesUtils.serializeIndex(indexData);
-            saveIndexProcess.command = ["sh", "-c", "printf '%s' '" + jsonContent.replace(/'/g, "'\\''") + "' > '" + indexPath + "'"];
-            saveIndexProcess.running = true;
+            FileWriter.write(indexPath, jsonContent);
 
             updateFilteredNotes();
             noteId = "";
@@ -1032,8 +1019,7 @@ Item {
             }
 
             var jsonContent = NotesUtils.serializeIndex(indexData);
-            saveIndexProcess.command = ["sh", "-c", "printf '%s' '" + jsonContent.replace(/'/g, "'\\''") + "' > '" + indexPath + "'"];
-            saveIndexProcess.running = true;
+            FileWriter.write(indexPath, jsonContent);
             noteId = "";
         }
     }

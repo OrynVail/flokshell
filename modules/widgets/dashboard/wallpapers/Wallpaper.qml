@@ -28,7 +28,6 @@ PanelWindow {
     property string fallbackDir: decodeURIComponent(Qt.resolvedUrl("../../../../assets/wallpapers_example").toString().replace("file://", ""))
     property var wallpaperPaths: []
     property var subfolderFilters: []
-    property var allSubdirs: []
     property int currentIndex: 0
     property string currentWallpaper: initialLoadCompleted && wallpaperPaths.length > 0 ? wallpaperPaths[currentIndex] : ""
     property bool initialLoadCompleted: false
@@ -233,13 +232,32 @@ PanelWindow {
         return "";
     }
 
-    function scanSubfolders() {
-        if (!wallpaperDir)
+    function applyScan(d) {
+        if (GlobalStates.wallpaperManager !== wallpaper)
             return;
-        // Explicitly update command with current wallpaperDir
-        var cmd = ["find", wallpaperDir, "-mindepth", "1", "-name", ".*", "-prune", "-o", "-type", "d", "-print"];
-        scanSubfoldersProcess.command = cmd;
-        scanSubfoldersProcess.running = true;
+        usingFallback = d.fallback;
+        subfolderFilters = d.folders;
+        if (JSON.stringify(d.files) === JSON.stringify(wallpaperPaths))
+            return;
+        wallpaperPaths = d.files;
+        if (wallpaperPaths.length === 0)
+            return;
+        const saved = wallpaperConfig.adapter.currentWall;
+        const index = saved ? wallpaperPaths.indexOf(saved) : -1;
+        currentIndex = index !== -1 ? index : 0;
+        if (!initialLoadCompleted) {
+            if (!saved)
+                wallpaperConfig.adapter.currentWall = wallpaperPaths[0];
+            initialLoadCompleted = true;
+        }
+    }
+
+    function scan() {
+        thumbs.send("scan", {
+            dir: wallpaper.wallpaperDir || wallpaper.fallbackDir,
+            fallback: wallpaper.fallbackDir,
+            cache: Quickshell.env("HOME") + "/.cache/flokshell"
+        });
     }
 
     // Update directory watcher when wallpaperDir changes
@@ -259,20 +277,7 @@ PanelWindow {
         wallpaperPaths = [];
         subfolderFilters = [];
 
-        directoryWatcher.path = wallpaperDir;
-
-        // Force update scan command
-        var cmd = ["find", wallpaperDir, "-name", ".*", "-prune", "-o", "-type", "f", "(", "-name", "*.jpg", "-o", "-name", "*.jpeg", "-o", "-name", "*.png", "-o", "-name", "*.webp", "-o", "-name", "*.tif", "-o", "-name", "*.tiff", "-o", "-name", "*.gif", "-o", "-name", "*.mp4", "-o", "-name", "*.webm", "-o", "-name", "*.mov", "-o", "-name", "*.avi", "-o", "-name", "*.mkv", ")", "-print"];
-        scanWallpapers.command = cmd;
-        scanWallpapers.running = true;
-
-        scanSubfolders();
-
-        // Regenerate thumbnails for the new directory (delayed)
-        if (delayedThumbnailGen.running)
-            delayedThumbnailGen.restart();
-        else
-            delayedThumbnailGen.start();
+        scan();
     }
 
     onCurrentWallpaperChanged:
@@ -530,10 +535,9 @@ PanelWindow {
         // Store the current active path so updateMpvRuntime knows which one to use
         wallpaper.mpvShaderPath = currentShaderPath;
 
-        var cmd = ["python3", "-c", "import sys, os, pathlib; " + "d = pathlib.Path(sys.argv[1]); " + "d.mkdir(parents=True, exist_ok=True); " + "[f.unlink() for f in d.iterdir() if f.is_file()]; " + "pathlib.Path(sys.argv[2]).write_text(sys.argv[3]); " + "print('Wrote shader to ' + sys.argv[2]); " + "legacy_dir = os.path.dirname(sys.argv[1]); " + "[pathlib.Path(legacy_dir, f).unlink(missing_ok=True) for f in ['mpv_tint_0.glsl', 'mpv_tint_1.glsl', 'mpv_tint.glsl']]", mpvShaderDir, currentShaderPath, shaderContent];
-
-        mpvShaderWriter.command = cmd;
-        mpvShaderWriter.running = true;
+        // mpv caches user shaders by path, so every palette needs a new name.
+        mpvShaderFile.path = currentShaderPath;
+        mpvShaderFile.setText(shaderContent);
     }
 
     property int ipcRetryCount: 0
@@ -565,37 +569,20 @@ PanelWindow {
         }
     }
 
+    FileView {
+        id: mpvShaderFile
+        printErrors: false
+        onSaved: {
+            shaderCleanup.command = ["find", wallpaper.mpvShaderDir, "-name", "tint_*.glsl", "!", "-path", path, "-delete"];
+            shaderCleanup.running = true;
+            wallpaper.mpvShaderReady = true;
+            wallpaper.updateMpvRuntime(true);
+        }
+        onSaveFailed: error => console.warn("Failed to write MPV shader:", error)
+    }
+
     Process {
-        id: mpvShaderWriter
-        running: false
-        command: []
-
-        stdout: StdioCollector {
-            onStreamFinished: {
-                if (text.length > 0) {
-                    console.log("mpvShaderWriter stdout:", text);
-                }
-            }
-        }
-
-        stderr: StdioCollector {
-            onStreamFinished: {
-                if (text.length > 0) {
-                    console.warn("mpvShaderWriter stderr:", text);
-                }
-            }
-        }
-
-        onExited: code => {
-            if (code === 0) {
-                console.log("MPV tint shader generated at:", mpvShaderPath);
-                mpvShaderReady = true;
-                // Apply immediately via IPC
-                updateMpvRuntime(true);
-            } else {
-                console.warn("Failed to generate MPV shader");
-            }
-        }
+        id: shaderCleanup
     }
 
     // Trigger update when colors change
@@ -657,8 +644,6 @@ PanelWindow {
 
         GlobalStates.wallpaperManager = wallpaper;
 
-        // Verificar si existe wallpapers.json, si no, crear con fallback
-        checkWallpapersJson.running = true;
 
         // Initial scans - do these once after config is loaded
         scanColorPresets();
@@ -694,6 +679,10 @@ PanelWindow {
         }
 
         onFileChanged: reload()
+        onLoadFailed: error => {
+            if (error === FileViewError.FileNotFound)
+                wallpaperConfig.adapter.wallPath = wallpaper.fallbackDir;
+        }
         onAdapterUpdated: {
             // Ensure matugenScheme has a default value
             if (!wallpaperConfig.adapter.matugenScheme) {
@@ -722,13 +711,13 @@ PanelWindow {
             }
 
             onCurrentWallChanged: {
-                // Skip during initial load - scanWallpapers handles this
+                // Skip during initial load - the scan handles this
                 if (!wallpaper._wallpaperDirInitialized)
                     return;
 
                 // Siempre actualizar si es diferente al actual
                 if (currentWall && currentWall !== wallpaper.currentWallpaper) {
-                    // If paths are not loaded yet, wait for scanWallpapers to finish
+                    // If paths are not loaded yet, wait for the scan to finish
                     if (wallpaper.wallpaperPaths.length === 0) {
                         return;
                     }
@@ -754,36 +743,9 @@ PanelWindow {
                     if (!wallpaper._wallpaperDirInitialized && GlobalStates.wallpaperManager === wallpaper) {
                         wallpaper._wallpaperDirInitialized = true;
 
-                        // Set up directory watcher
-                        directoryWatcher.path = wallPath;
-                        directoryWatcher.reload();
-
-                        // Perform initial wallpaper scan
-                        var cmd = ["find", wallPath, "-name", ".*", "-prune", "-o", "-type", "f", "(", "-name", "*.jpg", "-o", "-name", "*.jpeg", "-o", "-name", "*.png", "-o", "-name", "*.webp", "-o", "-name", "*.tif", "-o", "-name", "*.tiff", "-o", "-name", "*.gif", "-o", "-name", "*.mp4", "-o", "-name", "*.webm", "-o", "-name", "*.mov", "-o", "-name", "*.avi", "-o", "-name", "*.mkv", ")", "-print"];
-                        scanWallpapers.command = cmd;
-                        scanWallpapers.running = true;
-                        wallpaper.scanSubfolders();
-
-                        // Start thumbnail generation
-                        delayedThumbnailGen.start();
+                        wallpaper.scan();
                     }
                 }
-            }
-        }
-    }
-
-    Process {
-        id: checkWallpapersJson
-        running: false
-        // QUICKSHELL-GIT: command: ["test", "-f", Quickshell.cachePath("wallpapers.json")]
-        command: ["test", "-f", Quickshell.env("HOME") + "/.cache/flokshell/wallpapers.json"]
-
-        onExited: function (exitCode) {
-            if (exitCode !== 0) {
-                console.log("wallpapers.json does not exist, creating with fallbackDir");
-                wallpaperConfig.adapter.wallPath = fallbackDir;
-            } else {
-                console.log("wallpapers.json exists");
             }
         }
     }
@@ -844,113 +806,15 @@ PanelWindow {
         id: thumbs
         service: "thumbs"
         property real batches: -1
+        property string lastScan: ""
         onMessage: d => {
             if (batches >= 0 && d.wallpapers !== batches)
                 wallpaper.thumbnailsVersion++;
             batches = d.wallpapers;
-        }
-    }
-
-    Timer {
-        id: delayedThumbnailGen
-        interval: 2000 // Delay 2 seconds after change to not block
-        repeat: false
-        onTriggered: thumbs.send("wallpapers", {
-            dir: wallpaper.wallpaperDir || wallpaper.fallbackDir,
-            cache: Quickshell.env("HOME") + "/.cache/flokshell"
-        })
-    }
-
-    Process {
-        id: scanSubfoldersProcess
-        running: false
-        command: wallpaperDir ? ["find", wallpaperDir, "-mindepth", "1", "-name", ".*", "-prune", "-o", "-type", "d", "-print"] : []
-
-        stdout: StdioCollector {
-            onStreamFinished: {
-                console.log("scanSubfolders stdout:", text);
-                var rawPaths = text.trim().split("\n").filter(function (f) {
-                    return f.length > 0;
-                });
-
-                allSubdirs = rawPaths;
-
-                var basePath = wallpaperDir.endsWith("/") ? wallpaperDir : wallpaperDir + "/";
-
-                var topLevelFolders = rawPaths.filter(function (path) {
-                    var relative = path.replace(basePath, "");
-                    return relative.indexOf("/") === -1;
-                }).map(function (path) {
-                    return path.split("/").pop();
-                }).filter(function (name) {
-                    return name.length > 0 && !name.startsWith(".");
-                });
-
-                topLevelFolders.sort();
-                subfolderFilters = topLevelFolders;
-                subfolderFiltersChanged();  // Emitir señal manualmente
-                console.log("Updated subfolderFilters:", subfolderFilters);
-            }
-        }
-
-        stderr: StdioCollector {
-            onStreamFinished: {
-                if (text.length > 0) {
-                    console.warn("Error scanning subfolders:", text);
-                }
-            }
-        }
-
-        onRunningChanged: {
-            if (running) {
-                console.log("Starting scanSubfolders for directory:", wallpaperDir);
-            } else {
-                console.log("Finished scanSubfolders");
-            }
-        }
-    }
-
-    // Directory watcher using FileView to monitor the wallpaper directory
-    FileView {
-        id: directoryWatcher
-        path: wallpaperDir
-        watchChanges: true
-        printErrors: false
-
-        onFileChanged: {
-            if (wallpaperDir === "")
-                return;
-            console.log("Wallpaper directory changed, rescanning...");
-            scanWallpapers.running = true;
-            scanSubfoldersProcess.running = true;
-            // Regenerar thumbnails si hay nuevos videos (delayed)
-            if (delayedThumbnailGen.running)
-                delayedThumbnailGen.restart();
-            else
-                delayedThumbnailGen.start();
-        }
-
-        // Remove onLoadFailed to prevent premature fallback activation
-    }
-
-    // Recursive directory watchers for subfolders
-    Instantiator {
-        model: allSubdirs
-
-        delegate: FileView {
-            path: modelData
-            watchChanges: true
-            printErrors: false
-            onFileChanged: {
-                console.log("Subdirectory content changed (" + path + "), rescanning...");
-                scanWallpapers.running = true;
-                scanSubfoldersProcess.running = true;
-
-                // Regenerar thumbnails (delayed)
-                if (delayedThumbnailGen.running)
-                    delayedThumbnailGen.restart();
-                else
-                    delayedThumbnailGen.start();
+            const key = JSON.stringify(d.scan);
+            if (key !== lastScan && d.scan.dir !== "") {
+                lastScan = key;
+                wallpaper.applyScan(d.scan);
             }
         }
     }
@@ -978,127 +842,6 @@ PanelWindow {
         onFileChanged: {
             console.log("Official color presets directory changed, rescanning...");
             scanPresetsProcess.running = true;
-        }
-    }
-
-    Process {
-        id: scanWallpapers
-        running: false
-        command: wallpaperDir ? ["find", wallpaperDir, "-name", ".*", "-prune", "-o", "-type", "f", "(", "-name", "*.jpg", "-o", "-name", "*.jpeg", "-o", "-name", "*.png", "-o", "-name", "*.webp", "-o", "-name", "*.tif", "-o", "-name", "*.tiff", "-o", "-name", "*.gif", "-o", "-name", "*.mp4", "-o", "-name", "*.webm", "-o", "-name", "*.mov", "-o", "-name", "*.avi", "-o", "-name", "*.mkv", ")", "-print"] : []
-
-        onRunningChanged: {
-            if (running && wallpaperDir === "") {
-                console.log("Blocking scanWallpapers because wallpaperDir is empty");
-                running = false;
-            }
-        }
-
-        stdout: StdioCollector {
-            onStreamFinished: {
-                var files = text.trim().split("\n").filter(function (f) {
-                    return f.length > 0;
-                });
-                if (files.length === 0) {
-                    console.log("No wallpapers found in main directory, using fallback");
-                    usingFallback = true;
-                    scanFallback.running = true;
-                } else {
-                    usingFallback = false;
-                    // Only update if the list has actually changed
-                    var newFiles = files.sort();
-                    var listChanged = JSON.stringify(newFiles) !== JSON.stringify(wallpaperPaths);
-                    if (listChanged) {
-                        console.log("Wallpaper directory updated. Found", newFiles.length, "images");
-                        wallpaperPaths = newFiles;
-
-                        // Always try to load the saved wallpaper when list changes
-                        if (wallpaperPaths.length > 0) {
-                            // Trigger thumbnail generation if list changed
-                            if (delayedThumbnailGen.running)
-                                delayedThumbnailGen.restart();
-                            else
-                                delayedThumbnailGen.start();
-
-                            if (wallpaperConfig.adapter.currentWall) {
-                                var savedIndex = wallpaperPaths.indexOf(wallpaperConfig.adapter.currentWall);
-                                if (savedIndex !== -1) {
-                                    currentIndex = savedIndex;
-                                    console.log("Loaded saved wallpaper at index:", savedIndex);
-                                } else {
-                                    currentIndex = 0;
-                                    console.log("Saved wallpaper not found, using first");
-                                }
-                            } else {
-                                currentIndex = 0;
-                            }
-
-                            if (!initialLoadCompleted) {
-                                if (!wallpaperConfig.adapter.currentWall) {
-                                    wallpaperConfig.adapter.currentWall = wallpaperPaths[0];
-                                }
-                                initialLoadCompleted = true;
-                                // runMatugenForCurrentWallpaper() will be called by onCurrentWallChanged
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        stderr: StdioCollector {
-            onStreamFinished: {
-                if (text.length > 0) {
-                    console.warn("Error scanning wallpaper directory:", text);
-                    // Only fallback if we don't already have wallpapers loaded AND we have a valid directory that failed
-                    if (wallpaperPaths.length === 0 && wallpaperDir !== "") {
-                        console.log("Directory scan failed for " + wallpaperDir + ", using fallback");
-                        usingFallback = true;
-                        scanFallback.running = true;
-                    }
-                }
-            }
-        }
-    }
-
-    Process {
-        id: scanFallback
-        running: false
-        command: ["find", fallbackDir, "-name", ".*", "-prune", "-o", "-type", "f", "(", "-name", "*.jpg", "-o", "-name", "*.jpeg", "-o", "-name", "*.png", "-o", "-name", "*.webp", "-o", "-name", "*.tif", "-o", "-name", "*.tiff", "-o", "-name", "*.gif", "-o", "-name", "*.mp4", "-o", "-name", "*.webm", "-o", "-name", "*.mov", "-o", "-name", "*.avi", "-o", "-name", "*.mkv", ")", "-print"]
-
-        stdout: StdioCollector {
-            onStreamFinished: {
-                var files = text.trim().split("\n").filter(function (f) {
-                    return f.length > 0;
-                });
-                console.log("Using fallback wallpapers. Found", files.length, "images");
-
-                // Only use fallback if we don't already have main wallpapers loaded
-                if (usingFallback) {
-                    wallpaperPaths = files.sort();
-
-                    // Initialize fallback wallpaper selection
-                    if (wallpaperPaths.length > 0) {
-                        if (wallpaperConfig.adapter.currentWall) {
-                            var savedIndex = wallpaperPaths.indexOf(wallpaperConfig.adapter.currentWall);
-                            if (savedIndex !== -1) {
-                                currentIndex = savedIndex;
-                            } else {
-                                currentIndex = 0;
-                            }
-                        } else {
-                            currentIndex = 0;
-                        }
-
-                        if (!initialLoadCompleted) {
-                            if (!wallpaperConfig.adapter.currentWall) {
-                                wallpaperConfig.adapter.currentWall = wallpaperPaths[0];
-                            }
-                            initialLoadCompleted = true;
-                            // runMatugenForCurrentWallpaper() will be called by onCurrentWallChanged
-                        }
-                    }
-                }
-            }
         }
     }
 

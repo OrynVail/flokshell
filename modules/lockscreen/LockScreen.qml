@@ -496,7 +496,7 @@ WlSessionLockSurface {
                             id: passwordInput
                             Layout.fillWidth: true
                             Layout.alignment: Qt.AlignVCenter
-                            placeholderText: usernameCollector.text.trim()
+                            placeholderText: Quickshell.env("USER") ?? ""
                             placeholderTextColor: Qt.rgba(passwordFieldBg.item.r, passwordFieldBg.item.g, passwordFieldBg.item.b, 0.5)
                             font.family: Config.theme.font
                             font.pixelSize: Styling.fontSize(0)
@@ -595,27 +595,6 @@ WlSessionLockSurface {
     }
 
     // Processes for user info
-    Process {
-        id: usernameProc
-        command: ["whoami"]
-        running: true
-
-        stdout: StdioCollector {
-            id: usernameCollector
-            waitForEnd: true
-        }
-    }
-
-    Process {
-        id: hostnameProc
-        command: ["hostname"]
-        running: true
-
-        stdout: StdioCollector {
-            id: hostnameCollector
-            waitForEnd: true
-        }
-    }
 
     // Holder temporal para la contraseña durante autenticación
     QtObject {
@@ -626,15 +605,15 @@ WlSessionLockSurface {
     // Proceso para verificar tiempo de faillock
     Process {
         id: failLockCheck
-        command: ["bash", "-c", `faillock --user '${usernameCollector.text.trim()}' 2>/dev/null | grep -oP 'left \\K[0-9]+' | head -1`]
+        command: ["faillock", "--user", Quickshell.env("USER") ?? ""]
         running: false
 
         stdout: StdioCollector {
             id: failLockCollector
 
             onStreamFinished: {
-                const output = text.trim();
-                const seconds = parseInt(output);
+                const left = text.match(/left (\d+)/);
+                const seconds = left ? parseInt(left[1]) : NaN;
 
                 if (!isNaN(seconds) && seconds > 0) {
                     failLockSecondsLeft = seconds;

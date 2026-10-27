@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs.modules.services
 import qs.config
 
 QtObject {
@@ -192,13 +193,8 @@ QtObject {
         writer.text = ini
         
         // Single command to ensure dirs and write files
-        const cmd = `
-            mkdir -p "${qt5Dir}" "${qt6Dir}" && \\
-            echo "${ini}" | tee "${qt5Dir}/flokshell.colors" "${qt6Dir}/flokshell.colors" > /dev/null
-        `
-        
-        writerProcess.command = ["sh", "-c", cmd]
-        writerProcess.running = true
+        FileWriter.write(qt5Dir + "/flokshell.colors", ini + "\n")
+        FileWriter.write(qt6Dir + "/flokshell.colors", ini + "\n")
     }
     
     property QtObject writer: QtObject {

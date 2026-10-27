@@ -32,50 +32,14 @@ Singleton {
     }
 
     // flokd owns BlueZ; each message is the whole Bluetooth state.
-    readonly property string socketPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/run/user/1000") + "/flokd.sock"
-
-    Socket {
+    FlokdSocket {
         id: flokd
-        path: root.socketPath
-        connected: true
-
-        parser: SplitParser {
-            splitMarker: "\n"
-            onRead: data => {
-                if (!data)
-                    return;
-                try {
-                    let msg = JSON.parse(data);
-                    if (msg.service === "bluetooth")
-                        root.apply(msg.data);
-                } catch (e) {
-                    console.warn("BluetoothService: bad frame:", e);
-                }
-            }
-        }
-
-        onConnectionStateChanged: {
-            if (!connected)
-                reconnect.start();
-        }
-    }
-
-    Timer {
-        id: reconnect
-        interval: 2000
-        repeat: false
-        onTriggered: flokd.connected = true
+        service: "bluetooth"
+        onMessage: d => root.apply(d)
     }
 
     function send(cmd, args) {
-        let msg = {
-            service: "bluetooth",
-            cmd: cmd
-        };
-        if (args !== undefined)
-            msg.args = args;
-        flokd.write(JSON.stringify(msg) + "\n");
-        flokd.flush();
+        flokd.send(cmd, args);
     }
 
     function apply(d) {

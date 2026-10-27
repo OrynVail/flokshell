@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs.modules.services
 import qs.modules.globals
 
 QtObject {
@@ -26,11 +27,6 @@ QtObject {
 
             console.log("PywalGenerator: Using wallpaper:", image)
 
-            // Helper to escape double quotes for shell echo
-            const escape = (str) => {
-                if (!str) return ""
-                return str.toString().replace(/\\/g, "\\\\").replace(/"/g, '\\"')
-            }
             
             // Helper to darken color (percent 0-100)
             const darken = (c, percent) => {
@@ -120,24 +116,16 @@ QtObject {
             const home = Quickshell.env("HOME")
             const walDir = home + "/.cache/wal"
 
-            // Construct command safely
-            // Use cat with HEREDOC for better safety against special chars if possible, but echo is simpler for now if escaped
-            // Note: split into separate commands to avoid one failure blocking others?
-            // But we want directory created first.
             
-            const cmd = `
-                mkdir -p "${walDir}"
-                echo "${escape(colorsContent)}" > "${walDir}/colors"
-                echo "${escape(jsonContent)}" > "${walDir}/colors.json"
-                echo "${escape(shContent)}" > "${walDir}/colors.sh"
-                echo "${image}" > "${walDir}/wal"
-                pywalfox update &
-                walogram -B > /dev/null 2>&1 &
-            `
-            
-            // console.log("PywalGenerator: Executing command:\n", cmd)
-            writerProcess.command = ["sh", "-c", cmd]
-            writerProcess.running = true
+            FileWriter.write(walDir + "/colors", colorsContent + "\n")
+            FileWriter.write(walDir + "/colors.json", jsonContent + "\n")
+            FileWriter.write(walDir + "/colors.sh", shContent + "\n")
+            FileWriter.write(walDir + "/wal", image + "\n", ok => {
+                if (!ok)
+                    return;
+                writerProcess.command = ["sh", "-c", "pywalfox update & walogram -B > /dev/null 2>&1 &"];
+                writerProcess.running = true;
+            })
             
         } catch (e) {
             console.error("PywalGenerator: Critical error in generate:", e)

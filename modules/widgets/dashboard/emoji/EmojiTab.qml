@@ -219,8 +219,8 @@ Rectangle {
     }
 
     function loadEmojiData() {
-        emojiProcess.command = ["bash", "-c", "cat " + Qt.resolvedUrl("../../../../assets/emojis.json").toString().replace("file://", "")];
-        emojiProcess.running = true;
+        emojiFile.path = Qt.resolvedUrl("../../../../assets/emojis.json").toString().replace("file://", "");
+        emojiFile.reload();
     }
 
     function loadInitialEmojis() {
@@ -246,16 +246,13 @@ Rectangle {
     }
 
     function loadRecentEmojis() {
-        // QUICKSHELL-GIT: recentProcess.command = ["bash", "-c", "cat " + Quickshell.cacheDir + "/emojis.json 2>/dev/null || echo '[]'"];
-        recentProcess.command = ["bash", "-c", "cat " + Quickshell.env("HOME") + "/.cache/flokshell" + "/emojis.json 2>/dev/null || echo '[]'"];
-        recentProcess.running = true;
+        recentFile.path = root.recentPath;
+        recentFile.reload();
     }
 
     function saveRecentEmojis() {
         var jsonData = JSON.stringify(recentEmojis, null, 2);
-        // QUICKSHELL-GIT: saveProcess.command = ["bash", "-c", "echo '" + jsonData.replace(/'/g, "'\\''") + "' > " + Quickshell.cacheDir + "/emojis.json"];
-        saveProcess.command = ["bash", "-c", "echo '" + jsonData.replace(/'/g, "'\\''") + "' > " + Quickshell.env("HOME") + "/.cache/flokshell" + "/emojis.json"];
-        saveProcess.running = true;
+        FileWriter.write(root.recentPath, jsonData);
     }
 
     function addToRecent(emoji) {
@@ -329,53 +326,50 @@ Rectangle {
         }
     }
 
-    Process {
-        id: emojiProcess
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: {
-                try {
-                    var jsonData = JSON.parse(text.trim());
-                    var data = [];
-                    for (var emoji in jsonData) {
-                        var emojiInfo = jsonData[emoji];
-                        data.push({
-                            emoji: emoji,
-                            name: emojiInfo.name,
-                            slug: emojiInfo.slug,
-                            group: emojiInfo.group,
-                            search: emojiInfo.name + " " + emojiInfo.slug,
-                            skin_tone_support: emojiInfo.skin_tone_support || false
-                        });
-                    }
-                    emojiData = data;
-                    loadInitialEmojis();
-                } catch (e) {
-                    emojiData = [];
-                    loadInitialEmojis();
+    readonly property string recentPath: Quickshell.env("HOME") + "/.cache/flokshell/emojis.json"
+
+    FileView {
+        id: emojiFile
+        preload: false
+        onLoaded: {
+            try {
+                const jsonData = JSON.parse(text());
+                const data = [];
+                for (const emoji in jsonData) {
+                    const info = jsonData[emoji];
+                    data.push({
+                        emoji: emoji,
+                        name: info.name,
+                        slug: info.slug,
+                        group: info.group,
+                        search: info.name + " " + info.slug,
+                        skin_tone_support: info.skin_tone_support || false
+                    });
                 }
+                emojiData = data;
+            } catch (e) {
+                emojiData = [];
             }
+            loadInitialEmojis();
         }
     }
 
-    Process {
-        id: recentProcess
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: {
-                try {
-                    recentEmojis = JSON.parse(text.trim());
-                    updateRecentModel();
-                } catch (e) {
-                    recentEmojis = [];
-                    updateRecentModel();
-                }
+    FileView {
+        id: recentFile
+        preload: false
+        printErrors: false
+        onLoaded: {
+            try {
+                recentEmojis = JSON.parse(text());
+            } catch (e) {
+                recentEmojis = [];
             }
+            updateRecentModel();
         }
-    }
-
-    Process {
-        id: saveProcess
+        onLoadFailed: {
+            recentEmojis = [];
+            updateRecentModel();
+        }
     }
 
     Item {

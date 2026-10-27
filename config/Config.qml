@@ -70,30 +70,15 @@ Singleton {
     Process {
         id: ensureConfigDir
         running: true
-        command: [
-            "bash", "-c",
-            "mkdir -p '" + root.configDir + "' && " +
-            "cp -n '" + root.presetDir + "/theme.json' '" + root.configDir + "/theme.json' 2>/dev/null || true; " +
-            "cp -n '" + root.presetDir + "/frame.json' '" + root.configDir + "/frame.json' 2>/dev/null || true; " +
-            "cp -n '" + root.presetDir + "/workspaces.json' '" + root.configDir + "/workspaces.json' 2>/dev/null || true; " +
-            "cp -n '" + root.presetDir + "/overview.json' '" + root.configDir + "/overview.json' 2>/dev/null || true; " +
-            "cp -n '" + root.presetDir + "/notch.json' '" + root.configDir + "/notch.json' 2>/dev/null || true; " +
-            "cp -n '" + root.presetDir + "/compositor.json' '" + root.configDir + "/compositor.json' 2>/dev/null || true; " +
-            "cp -n '" + root.presetDir + "/performance.json' '" + root.configDir + "/performance.json' 2>/dev/null || true; " +
-            "cp -n '" + root.presetDir + "/desktop.json' '" + root.configDir + "/desktop.json' 2>/dev/null || true; " +
-            "cp -n '" + root.presetDir + "/lockscreen.json' '" + root.configDir + "/lockscreen.json' 2>/dev/null || true; " +
-            "cp -n '" + root.presetDir + "/dock.json' '" + root.configDir + "/dock.json' 2>/dev/null || true; " +
-            "cp -n '" + root.presetDir + "/system.json' '" + root.configDir + "/system.json' 2>/dev/null || true; " +
-            "cp -n '" + root.presetDir + "/media.json' '" + root.configDir + "/media.json' 2>/dev/null || true; " +
-            "echo 'Preset files copied if missing'"
-        ]
+        // Paths as arguments, never spliced into the script.
+        command: ["sh", "-c", 'mkdir -p "$2" && for n in theme frame workspaces overview notch compositor performance desktop lockscreen dock system media; do cp -n "$1/$n.json" "$2/$n.json" 2>/dev/null; done; true', "sh", root.presetDir, root.configDir]
     }
 
     // Auto-migrate hyprland.json → compositor.json for existing users
     Process {
         id: migrateCompositorConfig
         running: true
-        command: ["bash", "-c", `test -f '${root.configDir}/hyprland.json' && ! test -f '${root.configDir}/compositor.json' && mv '${root.configDir}/hyprland.json' '${root.configDir}/compositor.json' && echo 'Migrated hyprland.json to compositor.json' || true`]
+        command: ["sh", "-c", 'test -f "$1/hyprland.json" && ! test -f "$1/compositor.json" && mv "$1/hyprland.json" "$1/compositor.json"; true', "sh", root.configDir]
     }
 
     // ============================================

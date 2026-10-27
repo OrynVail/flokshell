@@ -448,9 +448,12 @@ Rectangle {
 
                                     let desktopContent = "[Desktop Entry]\n" + "Version=1.0\n" + "Type=Application\n" + "Name=" + selectedApp.appName + "\n" + "Exec=" + selectedApp.appExecString + "\n" + "Icon=" + selectedApp.appIcon + "\n" + (selectedApp.appComment ? "Comment=" + selectedApp.appComment + "\n" : "") + (selectedApp.appCategories.length > 0 ? "Categories=" + selectedApp.appCategories.join(";") + ";\n" : "") + (selectedApp.appRunInTerminal ? "Terminal=true\n" : "Terminal=false\n");
 
-                                    let writeCmd = "printf '%s' '" + desktopContent.replace(/'/g, "'\\''") + "' > \"" + filePath + "\" && chmod 755 \"" + filePath + "\" && gio set \"" + filePath + "\" metadata::trusted true";
-                                    copyProcess.command = ["sh", "-c", writeCmd];
-                                    copyProcess.running = true;
+                                    FileWriter.write(filePath, desktopContent, ok => {
+                                        if (!ok)
+                                            return;
+                                        copyProcess.command = ["sh", "-c", "chmod 755 \"$0\" && gio set \"$0\" metadata::trusted true", filePath];
+                                        copyProcess.running = true;
+                                    });
                                     appLauncher.expandedItemIndex = -1;
                                 }];
 
@@ -879,9 +882,12 @@ Rectangle {
 
                                             let desktopContent = "[Desktop Entry]\n" + "Version=1.0\n" + "Type=Application\n" + "Name=" + appName + "\n" + "Exec=" + appExecString + "\n" + "Icon=" + appIcon + "\n" + (appComment ? "Comment=" + appComment + "\n" : "") + (appCategories.length > 0 ? "Categories=" + appCategories.join(";") + ";\n" : "") + (appRunInTerminal ? "Terminal=true\n" : "Terminal=false\n");
 
-                                            let writeCmd = "printf '%s' '" + desktopContent.replace(/'/g, "'\\''") + "' > \"" + filePath + "\" && chmod 755 \"" + filePath + "\" && gio set \"" + filePath + "\" metadata::trusted true";
-                                            copyProcess.command = ["sh", "-c", writeCmd];
-                                            copyProcess.running = true;
+                                            FileWriter.write(filePath, desktopContent, ok => {
+                                                if (!ok)
+                                                    return;
+                                                copyProcess.command = ["sh", "-c", "chmod 755 \"$0\" && gio set \"$0\" metadata::trusted true", filePath];
+                                                copyProcess.running = true;
+                                            });
                                             appLauncher.expandedItemIndex = -1;
                                         }
                                     }

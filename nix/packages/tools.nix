@@ -8,7 +8,6 @@ with pkgs; [
 
   libnotify
   matugen
-  python3
   sqlite
   upower
   wl-clip-persist

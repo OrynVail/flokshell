@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs.modules.services
 import qs.config
 
 QtObject {
@@ -50,15 +51,13 @@ QtObject {
         writer.text = css
         
         // Write to GTK 3/4 and reload theme
-        const cmd = `
-            mkdir -p "${gtk3Dir}" "${gtk4Dir}" && \\
-            echo "${css}" | tee "${gtk3Dir}/gtk.css" "${gtk4Dir}/gtk.css" > /dev/null && \\
-            gsettings set org.gnome.desktop.interface gtk-theme "" && \\
-            gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3
-        `
-        
-        writerProcess.command = ["sh", "-c", cmd]
-        writerProcess.running = true
+        FileWriter.write(gtk3Dir + "/gtk.css", css + "\n")
+        FileWriter.write(gtk4Dir + "/gtk.css", css + "\n", ok => {
+            if (!ok)
+                return;
+            writerProcess.command = ["sh", "-c", "gsettings set org.gnome.desktop.interface gtk-theme '' && gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3"];
+            writerProcess.running = true;
+        })
     }
 
     property QtObject writer: QtObject {

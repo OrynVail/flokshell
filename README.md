@@ -46,8 +46,8 @@ It does less, so it holds less.
 
 | | Ambxst 1.1.5 | flokshell |
 |---|---|---|
-| QML files | 216 | 181 |
-| Lines of QML | 78,160 | 66,397 |
+| QML files | 216 | 179 |
+| Lines of QML | 78,160 | 63,489 |
 
 Three inefficiencies upstream still carries are fixed here. None of them change behaviour:
 
