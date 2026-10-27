@@ -218,11 +218,6 @@ Rectangle {
         }
     }
 
-    function loadEmojiData() {
-        emojiFile.path = Qt.resolvedUrl("../../../../assets/emojis.json").toString().replace("file://", "");
-        emojiFile.reload();
-    }
-
     function loadInitialEmojis() {
         emojisModel.clear();
         if (recentEmojis.length > 0 && searchText === "") {
@@ -243,11 +238,6 @@ Rectangle {
             initial.push(e);
         }
         filteredEmojis = initial;
-    }
-
-    function loadRecentEmojis() {
-        recentFile.path = root.recentPath;
-        recentFile.reload();
     }
 
     function saveRecentEmojis() {
@@ -330,7 +320,7 @@ Rectangle {
 
     FileView {
         id: emojiFile
-        preload: false
+        path: Qt.resolvedUrl("../../../../assets/emojis.json").toString().replace("file://", "")
         onLoaded: {
             try {
                 const jsonData = JSON.parse(text());
@@ -356,7 +346,7 @@ Rectangle {
 
     FileView {
         id: recentFile
-        preload: false
+        path: root.recentPath
         printErrors: false
         onLoaded: {
             try {
@@ -365,6 +355,9 @@ Rectangle {
                 recentEmojis = [];
             }
             updateRecentModel();
+            // The list may have loaded first, without the recent row.
+            if (searchText === "" && emojiData.length > 0)
+                loadInitialEmojis();
         }
         onLoadFailed: {
             recentEmojis = [];
@@ -915,8 +908,6 @@ Rectangle {
     }
 
     Component.onCompleted: {
-        loadEmojiData();
-        loadRecentEmojis();
         Qt.callLater(() => focusSearchInput());
     }
 
