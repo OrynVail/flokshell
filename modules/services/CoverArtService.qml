@@ -2,7 +2,6 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
-import Quickshell.Io
 import qs.config
 import qs.modules.globals
 
@@ -10,9 +9,6 @@ Singleton {
     id: root
 
     readonly property var player: MprisController.activePlayer
-
-    readonly property string cacheDir: Quickshell.env("HOME") + "/.cache/flokshell/coverart"
-    readonly property string scriptPath: Quickshell.shellDir + "/scripts/coverart.py"
 
     // "" when nothing resolved — callers fall back rather than show stale art.
     property string artPath: ""
@@ -87,45 +83,31 @@ Singleton {
 
     function resolve() {
         const p = root.player;
-        if (!p) {
+        if (!p)
             return;
-        }
 
-        const request = {
-            "artUrl": p.trackArtUrl ?? "",
-            "trackUrl": root.trackUrl,
-            "title": p.trackTitle ?? "",
-            "artist": p.trackArtist ?? "",
-            "album": p.trackAlbum ?? "",
-            "embedded": Config.media?.coverArtEmbedded ?? true,
-            "online": Config.media?.coverArtOnline ?? false
-        };
-
-        resolver.running = false;
-        resolver.command = ["python3", root.scriptPath, root.cacheDir, JSON.stringify(request)];
         root.resolving = true;
-        resolver.running = true;
+        flokd.send("resolve", {
+            key: root.trackKey,
+            art_url: p.trackArtUrl ?? "",
+            track_url: root.trackUrl,
+            title: p.trackTitle ?? "",
+            artist: p.trackArtist ?? "",
+            album: p.trackAlbum ?? "",
+            embedded: Config.media?.coverArtEmbedded ?? true,
+            online: Config.media?.coverArtOnline ?? false
+        });
     }
 
-    Process {
-        id: resolver
-
-        stdout: StdioCollector {
-            onStreamFinished: {
-                root.resolving = false;
-                if (text.trim() === "")
-                    return;
-                try {
-                    const result = JSON.parse(text);
-                    root.artPath = result.ok ? result.path : "";
-                    root.artOrigin = result.source ?? "none";
-                } catch (e) {
-                    root.artPath = "";
-                    root.artOrigin = "none";
-                }
-            }
+    FlokdSocket {
+        id: flokd
+        service: "coverart"
+        onMessage: d => {
+            if (d.key !== root.trackKey)
+                return;
+            root.resolving = false;
+            root.artPath = d.ok ? d.path : "";
+            root.artOrigin = d.source;
         }
-
-        onExited: root.resolving = false
     }
 }

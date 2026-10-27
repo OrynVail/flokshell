@@ -65,6 +65,24 @@ I have not benchmarked Ambxst, so there is no honest speed figure to quote again
 numbers are this shell before and after, one sample each, on my machine. The three fixes are
 things I read in upstream's source, not things I measured it doing.
 
+### flokd
+
+Upstream does its system work by spawning things: Python scripts, `nmcli`, `ddcutil`,
+`nvidia-smi`, ImageMagick once per image. `flokd` is a Rust daemon that owns that work instead,
+over D-Bus, procfs, sysfs and i2c directly, and the shell only renders what it sends.
+
+| | Before | flokd |
+|---|---|---|
+| Wallpaper thumbnails, 14 files | 1.69 s, 474 MB peak | 0.45 s |
+| Thumbnails already current | full rescan in Python | 1 ms |
+| External monitor brightness | `ddcutil`, ~280 ms per call | DDC/CI direct, ~85 ms |
+| NVIDIA GPU stats, per tick | `nvidia-smi`, ~100 ms | NVML, held while the tab is open |
+| Cover art from a FLAC | `ffmpeg` | read from the tags, 30 ms |
+| Link previews | one Python process each | in parallel, 3 in 0.84 s |
+
+Over 1,800 lines of Python are gone with it. Same caveat as above: this shell before and after,
+one sample each, on my machine.
+
 ---
 
 ## Install
@@ -95,9 +113,9 @@ Enough to look at it, and easy to undo.
 
 > [!IMPORTANT]
 > The profile install is the package alone. `flokd` gets no service, so whatever it owns —
-> currently weather, wifi and Bluetooth — stays empty and nothing restarts it. The
-> recommended system services (`upower`, `power-profiles-daemon`, NetworkManager) are not
-> enabled either; most setups already have them. Fonts are fine: the `flok` wrapper points
+> weather, wifi, Bluetooth, brightness, system stats, thumbnails, cover art and link
+> previews — stays empty and nothing restarts it. The recommended system services (`upower`,
+> `power-profiles-daemon`, NetworkManager) are not enabled either; most setups already have them. Fonts are fine: the `flok` wrapper points
 > fontconfig at its own bundle.
 
 No config file is needed either way. The shipped defaults in

@@ -19,7 +19,6 @@ QtObject {
     readonly property string insertScriptPath: Qt.resolvedUrl("../../scripts/clipboard_insert.sh").toString().replace("file://", "")
     readonly property string checkScriptPath: Qt.resolvedUrl("../../scripts/clipboard_check.sh").toString().replace("file://", "")
     readonly property string watchScriptPath: Qt.resolvedUrl("../../scripts/clipboard_watch.sh").toString().replace("file://", "")
-    readonly property string linkPreviewScriptPath: Qt.resolvedUrl("../../scripts/link_preview.py").toString().replace("file://", "")
 
     property bool _initialized: false
 
@@ -415,48 +414,12 @@ QtObject {
         }
     }
     
-    // Link preview metadata fetcher
-    property Process linkPreviewProcess: Process {
-        property string requestUrl: ""
-        property string requestItemId: ""
-        running: false
-        
-        stdout: StdioCollector {
-            waitForEnd: true
-            
-            onStreamFinished: {
-                try {
-                    var metadata = JSON.parse(text);
-                    // Use request_url from the response - this is the original URL we requested
-                    // This is crucial because requestUrl property may have been overwritten
-                    // by a subsequent request before this response arrived
-                    var responseUrl = metadata.request_url || metadata.url || linkPreviewProcess.requestUrl;
-                    
-                    // Cache the result if successful, using the URL from the response
-                    if (!metadata.error && responseUrl) {
-                        root.linkPreviewCache[responseUrl] = metadata;
-                    }
-                    // Note: requestItemId may also be stale, but the receiver validates it
-                    root.linkPreviewFetched(responseUrl, metadata, linkPreviewProcess.requestItemId);
-                } catch (e) {
-                    console.warn("ClipboardService: Failed to parse link preview:", e);
-                    root.linkPreviewFetched(linkPreviewProcess.requestUrl, {'error': 'Failed to parse response'}, linkPreviewProcess.requestItemId);
-                }
-            }
-        }
-        
-        stderr: StdioCollector {
-            onStreamFinished: {
-                if (text.length > 0) {
-                    console.warn("ClipboardService: linkPreviewProcess stderr:", text);
-                }
-            }
-        }
-        
-        onExited: function(code) {
-            if (code !== 0) {
-                root.linkPreviewFetched(linkPreviewProcess.requestUrl, {'error': 'Failed to fetch preview'}, linkPreviewProcess.requestItemId);
-            }
+    property FlokdSocket linkPreviews: FlokdSocket {
+        service: "linkpreview"
+        onMessage: d => {
+            if (!d.data.error)
+                root.linkPreviewCache[d.url] = d.data;
+            root.linkPreviewFetched(d.url, d.data, d.id);
         }
     }
 
@@ -643,10 +606,10 @@ QtObject {
             return;
         }
         
-        linkPreviewProcess.requestUrl = url;
-        linkPreviewProcess.requestItemId = itemId;
-        linkPreviewProcess.command = ["python3", linkPreviewScriptPath, url, "5"];
-        linkPreviewProcess.running = true;
+        linkPreviews.send("fetch", {
+            url: url,
+            id: itemId
+        });
     }
     
     // Reorder item by moving it to a new index

@@ -2,6 +2,7 @@ mod bus;
 mod config;
 mod dbus;
 mod ddc;
+mod http;
 mod services;
 
 use std::collections::HashMap;
@@ -74,6 +75,27 @@ async fn main() -> Result<()> {
     let (brightness_tx, brightness_rx) = mpsc::channel(64);
     commands.insert("brightness", brightness_tx);
     tokio::spawn(services::brightness::Service::new(bus.clone()).run(brightness_rx));
+
+    let (coverart_tx, coverart_rx) = mpsc::channel(4);
+    commands.insert("coverart", coverart_tx);
+    tokio::spawn(
+        services::coverart::Service::new(bus.clone())
+            .context("coverart service")?
+            .run(coverart_rx),
+    );
+
+    let (thumbs_tx, thumbs_rx) = mpsc::channel(8);
+    commands.insert("thumbs", thumbs_tx);
+    tokio::spawn(services::thumbs::Service::new(bus.clone()).run(thumbs_rx));
+
+    // A clipboard list can ask for a preview per visible link at once.
+    let (linkpreview_tx, linkpreview_rx) = mpsc::channel(32);
+    commands.insert("linkpreview", linkpreview_tx);
+    tokio::spawn(
+        services::linkpreview::Service::new(bus.clone())
+            .context("linkpreview service")?
+            .run(linkpreview_rx),
+    );
 
     let path = socket_path();
     // Single instance is the unit's job; a leftover socket is never a live peer.

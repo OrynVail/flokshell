@@ -100,7 +100,10 @@ Singleton {
 
     function generateThumbnails() {
         if (desktopDir) {
-            thumbnailProcess.running = true;
+            thumbs.send("desktop", {
+                dir: desktopDir,
+                cache: Quickshell.env("HOME") + "/.cache/flokshell/desktop_thumbnails"
+            });
         }
     }
 
@@ -610,27 +613,9 @@ Singleton {
         }
     }
 
-    Process {
-        id: thumbnailProcess
-        running: false
-        // QUICKSHELL-GIT: command: ["python3", decodeURIComponent(Qt.resolvedUrl("../../scripts/desktop_thumbgen.py").toString().replace("file://", "")), desktopDir, Quickshell.cacheDir + "/desktop_thumbnails"]
-        command: ["python3", decodeURIComponent(Qt.resolvedUrl("../../scripts/desktop_thumbgen.py").toString().replace("file://", "")), desktopDir, Quickshell.env("HOME") + "/.cache/flokshell" + "/desktop_thumbnails"]
-
-        stdout: StdioCollector {
-            onStreamFinished: {
-                if (text.length > 0) {
-                    console.log("Thumbnail generation:", text);
-                }
-            }
-        }
-
-        stderr: StdioCollector {
-            onStreamFinished: {
-                if (text.length > 0) {
-                    console.log("Thumbnail generation output:", text);
-                }
-            }
-        }
+    FlokdSocket {
+        id: thumbs
+        service: "thumbs"
     }
 
     Timer {

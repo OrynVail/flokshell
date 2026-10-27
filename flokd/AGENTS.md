@@ -14,11 +14,15 @@ src/
 ├── config.rs            # reads ~/.config/flokshell/config/*.json, watches for changes
 ├── dbus.rs              # shared system-bus helpers: calls, property reads, owner watch
 ├── ddc.rs               # DDC/CI over i2c-dev: EDID, VCP get/set
+├── http.rs              # shared client builder, size-capped GET
 └── services/
     ├── bluetooth.rs     # BlueZ: adapter, devices, discovery, connects
     ├── brightness.rs    # backlight through logind, external displays over DDC/CI
+    ├── coverart.rs      # MPRIS art: URL, tags, sidecar, online; content-addressed cache
+    ├── linkpreview.rs   # Open Graph scrape, YouTube and X oEmbed
     ├── network.rs       # NetworkManager over the system bus: state, scans, connects
     ├── resources.rs     # CPU, RAM, GPU (NVML, amdgpu sysfs), disks; sampled under a lease
+    ├── thumbs.rs        # wallpaper/desktop thumbnails, lockscreen frame; ffmpeg for video only
     └── weather.rs       # open-meteo + geocoding + geoip fallback chain
 ```
 
@@ -42,7 +46,7 @@ harmless. That is what lets a connecting client subscribe first and take the sna
 with no gap, and lets a lagging client be resynced instead of replayed.
 
 The QML side reads it with `SplitParser { splitMarker: "\n" }` on a `Socket` and writes
-commands with `Socket.write`. See `modules/services/WeatherService.qml`.
+commands with `Socket.write`. New clients use `modules/services/FlokdSocket.qml`.
 
 ## ADDING A SERVICE
 1. `src/services/<name>.rs` with a `State` that is `Serialize + Deserialize + Default`.

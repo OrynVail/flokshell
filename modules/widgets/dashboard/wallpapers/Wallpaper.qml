@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io
 import qs.modules.globals
+import qs.modules.services
 import qs.modules.theme
 import qs.config
 import "MpvShaderGenerator.js" as ShaderGenerator
@@ -216,13 +217,10 @@ PanelWindow {
 
         console.log("Generating lockscreen frame for:", filePath);
 
-        var scriptPath = decodeURIComponent(Qt.resolvedUrl("../../../../scripts/lockwall.py").toString().replace("file://", ""));
-        // QUICKSHELL-GIT: var dataPath = Quickshell.cacheDir;
-        var dataPath = Quickshell.env("HOME") + "/.cache/flokshell";
-
-        lockscreenWallpaperScript.command = ["python3", scriptPath, filePath, dataPath];
-
-        lockscreenWallpaperScript.running = true;
+        thumbs.send("lockframe", {
+            path: filePath,
+            cache: Quickshell.env("HOME") + "/.cache/flokshell"
+        });
     }
 
     function getSubfolderFromPath(filePath) {
@@ -842,36 +840,14 @@ PanelWindow {
         }
     }
 
-    // Proceso para generar thumbnails de videos
-    Process {
-        id: thumbnailGeneratorScript
-        running: false
-        // QUICKSHELL-GIT: command: ["python3", decodeURIComponent(Qt.resolvedUrl("../../../../scripts/thumbgen.py").toString().replace("file://", "")), Quickshell.cacheDir + "/wallpapers.json", Quickshell.cacheDir, fallbackDir]
-        command: ["python3", decodeURIComponent(Qt.resolvedUrl("../../../../scripts/thumbgen.py").toString().replace("file://", "")), Quickshell.env("HOME") + "/.cache/flokshell" + "/wallpapers.json", Quickshell.env("HOME") + "/.cache/flokshell", fallbackDir]
-
-        stdout: StdioCollector {
-            onStreamFinished: {
-                if (text.length > 0) {
-                    console.log("Thumbnail Generator:", text);
-                }
-            }
-        }
-
-        stderr: StdioCollector {
-            onStreamFinished: {
-                if (text.length > 0) {
-                    console.warn("Thumbnail Generator Error:", text);
-                }
-            }
-        }
-
-        onExited: function (exitCode) {
-            if (exitCode === 0) {
-                console.log("✅ Video thumbnails generated successfully");
-                thumbnailsVersion++;
-            } else {
-                console.warn("⚠️ Thumbnail generation failed with code:", exitCode);
-            }
+    FlokdSocket {
+        id: thumbs
+        service: "thumbs"
+        property real batches: -1
+        onMessage: d => {
+            if (batches >= 0 && d.wallpapers !== batches)
+                wallpaper.thumbnailsVersion++;
+            batches = d.wallpapers;
         }
     }
 
@@ -879,38 +855,10 @@ PanelWindow {
         id: delayedThumbnailGen
         interval: 2000 // Delay 2 seconds after change to not block
         repeat: false
-        onTriggered: thumbnailGeneratorScript.running = true
-    }
-
-    // Proceso para generar frame de lockscreen con el script de Python
-    Process {
-        id: lockscreenWallpaperScript
-        running: false
-        command: []
-
-        stdout: StdioCollector {
-            onStreamFinished: {
-                if (text.length > 0) {
-                    console.log("Lockscreen Wallpaper Generator:", text);
-                }
-            }
-        }
-
-        stderr: StdioCollector {
-            onStreamFinished: {
-                if (text.length > 0) {
-                    console.warn("Lockscreen Wallpaper Generator Error:", text);
-                }
-            }
-        }
-
-        onExited: function (exitCode) {
-            if (exitCode === 0) {
-                console.log("✅ Lockscreen wallpaper ready");
-            } else {
-                console.warn("⚠️ Lockscreen wallpaper generation failed with code:", exitCode);
-            }
-        }
+        onTriggered: thumbs.send("wallpapers", {
+            dir: wallpaper.wallpaperDir || wallpaper.fallbackDir,
+            cache: Quickshell.env("HOME") + "/.cache/flokshell"
+        })
     }
 
     Process {

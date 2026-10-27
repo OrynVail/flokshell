@@ -13,11 +13,6 @@ Python and Bash backend utilities invoked by QML services via `Quickshell.Io.Pro
 | `ocr.sh` | Bash | Tools | Screenshot → OCR text extraction |
 | `qr_scan.sh` | Bash | Tools | QR/barcode scanning from screen capture |
 | `google_lens.sh` | Bash | Tools | Google Lens image search |
-| `thumbgen.py` | Python | `WallpapersTab` | Wallpaper thumbnail generation |
-| `desktop_thumbgen.py` | Python | `DesktopService.qml` | Desktop icon thumbnail generation |
-| `lockwall.py` | Python | `LockScreen.qml` | Lockscreen wallpaper blur preprocessing |
-| `link_preview.py` | Python | Clipboard | URL metadata/preview extraction |
-| `coverart.py` | Python | `CoverArtService.qml` | Resolves MPRIS cover art into a content-addressed cache |
 | `sleep_monitor.sh` | Bash | `SuspendManager` | Monitors system sleep/wake events |
 | `loginlock.sh` | Bash | `LockScreen` | Login lock coordination |
 | `daemon_priority.sh` | Bash | Shell init | Process priority adjustment |
