@@ -256,7 +256,7 @@ ShellRoot {
 
             Qt.callLater(() => {
                 _ = CaffeineService.inhibit;
-                _ = IdleService.lockCmd; // Force init
+                _ = IdleService.suspended;
                 _ = GlobalShortcuts.appId; // Force init (IPC pipe listener)
             });
         }

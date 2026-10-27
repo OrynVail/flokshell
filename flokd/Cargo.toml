@@ -21,13 +21,16 @@ tokio = { version = "1", features = ["rt", "macros", "net", "sync", "time", "fs"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = "2.5.8"
+wayland-client = "0.31.15"
+wayland-protocols = { version = "0.32.13", features = ["client", "staging", "unstable"] }
+wayland-protocols-wlr = { version = "0.3.12", features = ["client"] }
 zbus = { version = "6.1.0", default-features = false, features = ["tokio"] }
 
 # rustls over openssl: no native TLS to thread through the Nix build.
 [dependencies.reqwest]
 version = "0.13"
 default-features = false
-features = ["json", "query", "rustls", "gzip"]
+features = ["json", "query", "rustls", "gzip", "multipart"]
 
 [profile.release]
 lto = true

@@ -1,25 +1,27 @@
+pragma Singleton
+
 import QtQuick
 import Quickshell
-
-pragma Singleton
 
 Singleton {
     id: root
 
-    property alias inhibit: idleInhibitor.enabled
+    property bool inhibit: false
 
     function toggleInhibit() {
         inhibit = !inhibit;
     }
 
-    IdleInhibitor {
-        id: idleInhibitor
+    onInhibitChanged: {
+        if (StateService.initialized)
+            StateService.set("caffeine", inhibit);
+        push();
+    }
 
-        onEnabledChanged: {
-            if (StateService.initialized) {
-                StateService.set("caffeine", enabled);
-            }
-        }
+    function push() {
+        flokd.send("caffeine", {
+            on: root.inhibit
+        });
     }
 
     Connections {
@@ -29,14 +31,12 @@ Singleton {
         }
     }
 
-    Timer {
-        interval: 500
-        running: true
-        repeat: false
-        onTriggered: {
-            if (StateService.initialized) {
-                root.inhibit = StateService.get("caffeine", false);
-            }
+    FlokdSocket {
+        id: flokd
+        service: "idle"
+        onConnectionStateChanged: {
+            if (connected)
+                root.push();
         }
     }
 }

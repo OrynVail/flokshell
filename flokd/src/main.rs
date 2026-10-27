@@ -4,6 +4,7 @@ mod dbus;
 mod ddc;
 mod http;
 mod services;
+mod wayland;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -95,6 +96,21 @@ async fn main() -> Result<()> {
         services::linkpreview::Service::new(bus.clone())
             .context("linkpreview service")?
             .run(linkpreview_rx),
+    );
+
+    // Subscribers first, so no note the driver sends at connect is missed.
+    let (notes, _) = tokio::sync::broadcast::channel(64);
+    let (nightlight_tx, nightlight_rx) = mpsc::channel(4);
+    let (idle_tx, idle_rx) = mpsc::channel(4);
+    let wl = wayland::spawn(notes.clone());
+    commands.insert("nightlight", nightlight_tx);
+    tokio::spawn(
+        services::nightlight::Service::new(bus.clone(), wl.clone(), notes.subscribe())
+            .run(nightlight_rx),
+    );
+    commands.insert("idle", idle_tx);
+    tokio::spawn(
+        services::idle::Service::new(bus.clone(), wl, notes.subscribe()).run(idle_rx),
     );
 
     let path = socket_path();
