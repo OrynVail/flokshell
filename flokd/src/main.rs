@@ -3,6 +3,7 @@ mod config;
 mod dbus;
 mod ddc;
 mod http;
+mod hyprland;
 mod notify;
 mod services;
 mod wayland;
@@ -121,6 +122,11 @@ async fn main() -> Result<()> {
             .context("capture service")?
             .run(capture_rx),
     );
+
+    // Every dispatch is a user action; none may be the one dropped.
+    let (compositor_tx, compositor_rx) = mpsc::channel(32);
+    commands.insert("compositor", compositor_tx);
+    tokio::spawn(services::compositor::Service::new(bus.clone()).run(compositor_rx));
 
     let path = socket_path();
     // Single instance is the unit's job; a leftover socket is never a live peer.

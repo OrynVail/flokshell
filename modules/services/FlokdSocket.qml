@@ -9,6 +9,8 @@ Socket {
     required property string service
 
     signal message(var data)
+    // The whole frame, for keyed services that need its event and key.
+    signal frame(var msg)
 
     path: (Quickshell.env("XDG_RUNTIME_DIR") || "/run/user/1000") + "/flokd.sock"
     connected: true
@@ -20,8 +22,10 @@ Socket {
                 return;
             try {
                 const msg = JSON.parse(data);
-                if (msg.service === socket.service)
-                    socket.message(msg.data);
+                if (msg.service !== socket.service)
+                    return;
+                socket.frame(msg);
+                socket.message(msg.data);
             } catch (e) {
                 console.warn(`flokd ${socket.service}: bad frame:`, e);
             }

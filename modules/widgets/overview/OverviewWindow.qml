@@ -264,6 +264,11 @@ Item {
         onExited: root.hovered = false
 
         onPressed: mouse => {
+            // A drag moves x and y from C++, which leaves their bindings live:
+            // any windowData update mid-drag would snap the item back. Assigning
+            // here detaches them; release binds them again.
+            root.x = root.x;
+            root.y = root.y;
             root.pressed = true;
             root.Drag.active = true;
             root.Drag.source = root;
@@ -320,19 +325,15 @@ Item {
                         AxctlService.dispatch(`movetoworkspacesilent ${targetWorkspace}, address:${windowData?.address}`);
                         AxctlService.dispatch(`movewindowpixel exact ${percentageX}% ${percentageY}%, address:${windowData?.address}`);
                         
-                        // Force immediate window data update
-                        CompositorData.updateWindowList();
                     } else {
                         // Just move workspace without repositioning
                         AxctlService.dispatch(`movetoworkspacesilent ${targetWorkspace}, address:${windowData?.address}`);
                         
-                        // Force immediate window data update
-                        CompositorData.updateWindowList();
                     }
                     
                     // Reset position in overview
-                    root.x = root.initX;
-                    root.y = root.initY;
+                    root.x = Qt.binding(() => root.initX);
+                    root.y = Qt.binding(() => root.initY);
                 } else if (windowData?.floating && (root.x !== root.initX || root.y !== root.initY)) {
                     // Dropped on same workspace and floating - reposition
                     const relativeX = root.x - root.xOffset;
@@ -346,24 +347,32 @@ Item {
                     
                     AxctlService.dispatch(`movewindowpixel exact ${percentageX}% ${percentageY}%, address:${windowData?.address}`);
                     
-                    // Force immediate window data update
-                    CompositorData.updateWindowList();
                     
                     // Set override position for immediate visual update
                     root.overrideX = draggedX;
                     root.overrideY = draggedY;
                     root.useOverridePosition = true;
                     
-                    root.x = draggedX;
-                    root.y = draggedY;
+                    root.x = Qt.binding(() => root.initX);
+                    root.y = Qt.binding(() => root.initY);
                     
                     resetOverrideTimer.restart();
                 } else {
                     // Reset position for non-floating or non-moved windows
-                    root.x = root.initX;
-                    root.y = root.initY;
+                    root.x = Qt.binding(() => root.initX);
+                    root.y = Qt.binding(() => root.initY);
                 }
+            } else {
+                root.x = Qt.binding(() => root.initX);
+                root.y = Qt.binding(() => root.initY);
             }
+        }
+
+        onCanceled: {
+            root.pressed = false;
+            root.Drag.active = false;
+            root.x = Qt.binding(() => root.initX);
+            root.y = Qt.binding(() => root.initY);
         }
 
         onClicked: mouse => {

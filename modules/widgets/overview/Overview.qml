@@ -303,36 +303,36 @@ Item {
             implicitWidth: workspaceColumnLayout.implicitWidth
             implicitHeight: workspaceColumnLayout.implicitHeight
 
-            // Pre-filter windows for this monitor and workspace group
-            readonly property var filteredWindowData: {
+            // Addresses, not window objects: a model of fresh objects makes the
+            // Repeater rebuild every delegate on each compositor update, which
+            // drops a drag in progress. Each delegate looks its window up instead.
+            readonly property var filteredAddresses: {
                 const minWs = overviewRoot.workspaceGroup * overviewRoot.workspacesShown;
                 const maxWs = (overviewRoot.workspaceGroup + 1) * overviewRoot.workspacesShown;
                 const monId = overviewRoot.monitorId;
-                const toplevels = ToplevelManager.toplevels.values;
-
                 return overviewRoot.windowList.filter(win => {
                     const wsId = win?.workspace?.id;
                     return wsId > minWs && wsId <= maxWs && win.monitor === monId;
-                }).map(win => ({
-                            windowData: win,
-                            toplevel: (() => {
-                                const cls = win.class || "";
-                                if (!cls) return null;
-                                const candidates = toplevels.filter(t => t.appId === cls);
-                                if (candidates.length <= 1) return candidates[0] || null;
-                                return candidates.find(t => t.title === (win.title || "")) || candidates[0];
-                            })()
-                        }));
+                }).map(win => win.address);
             }
 
             Repeater {
-                model: windowSpace.filteredWindowData
+                model: ScriptModel {
+                    values: windowSpace.filteredAddresses
+                    comparisonMode: ObjectComparison.Identity
+                }
 
                 delegate: OverviewWindow {
                     id: window
                     required property var modelData
-                    windowData: modelData.windowData
-                    toplevel: modelData.toplevel
+                    windowData: CompositorData.windowByAddress[modelData] || null
+                    toplevel: {
+                        const cls = windowData?.class || "";
+                        if (!cls) return null;
+                        const candidates = ToplevelManager.toplevels.values.filter(t => t.appId === cls);
+                        if (candidates.length <= 1) return candidates[0] || null;
+                        return candidates.find(t => t.title === (windowData.title || "")) || candidates[0];
+                    }
                     scale: overviewRoot.scale
                     availableWorkspaceWidth: overviewRoot.workspaceImplicitWidth
                     availableWorkspaceHeight: overviewRoot.workspaceImplicitHeight
