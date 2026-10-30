@@ -2,7 +2,6 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
-import Quickshell.Io
 import qs.modules.globals
 
 Singleton {
@@ -24,11 +23,36 @@ Singleton {
         property var values: []
     }
 
-    property string configPath: (Quickshell.env("XDG_DATA_HOME") || (Quickshell.env("HOME") + "/.local/share")) + "/flokshell/axctl.toml"
-
     function dispatch(command) {
         if (command)
             flokd.send("dispatch", { cmd: command });
+    }
+
+    // Callbacks waiting on one-off answers from flokd.
+    property var pending: ({ refreshed: [], cursor: [] })
+
+    // Fresh window positions and sizes, which Hyprland never announces.
+    function refresh(callback) {
+        if (!flokd.connected) {
+            if (callback)
+                callback(null);
+            return;
+        }
+        if (callback)
+            pending.refreshed.push(callback);
+        flokd.send("refresh");
+    }
+
+    function cursorPos(callback) {
+        pending.cursor.push(callback);
+        flokd.send("cursor");
+    }
+
+    function answer(kind, data) {
+        const waiting = pending[kind];
+        pending[kind] = [];
+        for (const cb of waiting)
+            cb(data);
     }
 
     function monitorFor(screen) {
@@ -72,6 +96,8 @@ Singleton {
             touched[kind][id] = true;
         } else if (msg.event === "commit") {
             commit();
+        } else if (msg.event === "refreshed" || msg.event === "cursor") {
+            answer(msg.event, msg.data);
         }
     }
 
@@ -192,21 +218,7 @@ Singleton {
         target: GlobalStates
         function onOverviewOpenChanged() {
             if (GlobalStates.overviewOpen)
-                flokd.send("refresh");
+                root.refresh();
         }
     }
-
-    property Process ensureConfigDir: Process {
-        command: ["mkdir", "-p", (Quickshell.env("XDG_DATA_HOME") || (Quickshell.env("HOME") + "/.local/share")) + "/flokshell"]
-        running: true
-    }
-
-    // Only the config writers and the CLI callers still need it.
-    property Process axctlProcess: Process {
-        command: ["axctl", "-c", root.configPath, "daemon"]
-        running: true
-        onExited: code => console.warn("axctl daemon exited with code:", code)
-    }
-
-    Component.onDestruction: axctlProcess.running = false
 }

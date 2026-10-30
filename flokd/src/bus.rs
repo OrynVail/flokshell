@@ -115,6 +115,14 @@ impl Bus {
         let _ = self.tx.send(burst.join("\n"));
     }
 
+    // An answer to one request, for whoever asked: broadcast, never cached,
+    // so a client connecting later does not receive it.
+    pub fn event(&self, service: &str, event: &str, data: &Value) {
+        if let Some(l) = line(service, event, None, Some(data)) {
+            let _ = self.tx.send(l);
+        }
+    }
+
     pub fn subscribe(&self) -> broadcast::Receiver<String> {
         self.tx.subscribe()
     }

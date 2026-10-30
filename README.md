@@ -121,6 +121,27 @@ Enough to look at it, and easy to undo.
 No config file is needed either way. The shipped defaults in
 `assets/presets/Flokshell Default/` are the setup I actually run.
 
+### Keybinds
+
+flokshell has its own binds, editable from the dashboard. `flokd` writes them to
+`~/.config/hypr/flokshell.lua` and `flokshell.conf`, and that is as far as it goes — nothing is
+added to your config, so Hyprland only loads them if you ask it to.
+
+To use them, include whichever file matches your config:
+
+```lua
+-- hyprland.lua
+require("flokshell")
+```
+
+```ini
+# hyprland.conf
+source = ~/.config/hypr/flokshell.conf
+```
+
+To keep your own, include neither. The bind editor still saves, it just has nowhere to land.
+Mixing the two on the same keys is not something I handle — pick one per key.
+
 ---
 
 ## Status

@@ -16,10 +16,6 @@ Singleton {
     property var workspaceOccupationMap: ({})
     property var workspaceWindowsMap: ({})
 
-    function updateWindowList() {
-        // No-op: state is now pushed inline via axctl subscribe events
-    }
-
     function updateMaps() {
         let occupationMap = {}
         let windowsMap = {}
@@ -36,15 +32,11 @@ Singleton {
         root.workspaceWindowsMap = windowsMap
     }
 
-    Component.onCompleted: {
-        updateWindowList()
-    }
-
     Connections {
-        target: AxctlService.clients
+        target: CompositorService.clients
 
         function onValuesChanged() {
-            root.windowList = AxctlService.clients.values
+            root.windowList = CompositorService.clients.values
             let tempWinByAddress = {}
             for (var i = 0; i < root.windowList.length; ++i) {
                 var win = root.windowList[i]
@@ -57,10 +49,10 @@ Singleton {
     }
 
     Connections {
-        target: AxctlService.monitors
+        target: CompositorService.monitors
 
         function onValuesChanged() {
-            root.monitors = AxctlService.monitors.values
+            root.monitors = CompositorService.monitors.values
         }
     }
 }

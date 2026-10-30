@@ -1,9 +1,8 @@
 # Main Flokshell package
-{ pkgs, lib, self, system, axctl, version }:
+{ pkgs, lib, self, system, version }:
 
 let
   quickshellPkg = pkgs.quickshell;
-  axctlPkg = axctl.packages.${system}.default;
 
   # Import sub-packages
   ttf-phosphor-icons = import ./phosphor-icons.nix { inherit pkgs; };
@@ -19,7 +18,7 @@ let
 
   # Combine all packages (NixOS-specific deps handled by the module)
   baseEnv = corePkgs
-    ++ [ axctlPkg flokd ]
+    ++ [ flokd ]
     ++ toolsPkgs
     ++ mediaPkgs
     ++ appsPkgs

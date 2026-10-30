@@ -18,7 +18,6 @@ QtObject {
     property string screenshotsDir: ""
     property string finalPath: ""
 
-    property var _activeWorkspaceIds: []
     property var monitors: []
     property var frozen: []
 
@@ -72,7 +71,38 @@ QtObject {
     }
 
     function fetchWindows() {
-        monitorsProcess.running = true;
+        CompositorService.refresh(() => {
+            const monitors = (CompositorService.monitors.values || []).map(m => ({
+                id: m.id,
+                name: m.name,
+                width: m.width,
+                height: m.height,
+                scale: m.scale,
+                refresh_rate: m.refreshRate,
+                focused: m.focused,
+                x: m.x,
+                y: m.y,
+                transform: m.transform,
+                activeWorkspace: m.activeWorkspace
+            }));
+            root.monitors = monitors;
+            root.monitorsListReady(monitors);
+            const visible = monitors.map(m => m.activeWorkspace ? m.activeWorkspace.id : null);
+            root.windowListReady((CompositorService.clients.values || []).filter(c => c.pinned || visible.includes(c.workspace.id)).map(c => ({
+                id: c.address,
+                app_id: c.class,
+                title: c.title,
+                is_floating: c.floating,
+                is_focused: c.is_focused,
+                is_fullscreen: c.fullscreen,
+                is_hidden: c.hidden,
+                workspace_id: c.workspace.id,
+                pinned: c.pinned,
+                workspace: { id: c.workspace.id },
+                at: c.at,
+                size: c.size
+            })));
+        });
     }
 
     function outputAt(x, y) {
@@ -127,86 +157,6 @@ QtObject {
         root._ocrLangs = langs;
         root.captureMode = "ocr";
         GlobalStates.screenshotToolVisible = true;
-    }
-
-    // Process for fetching monitors
-    property Process monitorsProcess: Process {
-        id: monitorsProcess
-        command: ["axctl", "monitor", "list"]
-        stdout: StdioCollector {}
-        onExited: exitCode => {
-            if (exitCode === 0) {
-                try {
-                    var rawMonitors = JSON.parse(monitorsProcess.stdout.text)
-                    var normalized = rawMonitors.map(m => ({
-                        id: m.id,
-                        name: m.name,
-                        width: m.width,
-                        height: m.height,
-                        scale: m.scale,
-                        refresh_rate: m.refresh_rate,
-                        focused: m.is_focused,
-                        x: m.metadata ? m.metadata.x : 0,
-                        y: m.metadata ? m.metadata.y : 0,
-                        transform: m.metadata ? m.metadata.transform : 0,
-                        activeWorkspace: m.metadata ? { id: m.metadata.active_workspace } : null
-                    }))
-                    root.monitors = normalized;
-                    var ids = []
-                    for (var i = 0; i < normalized.length; i++) {
-                        if (normalized[i].activeWorkspace) {
-                            ids.push(normalized[i].activeWorkspace.id)
-                        }
-                    }
-                    root._activeWorkspaceIds = ids
-                    clientsProcess.running = true
-
-                    root.monitorsListReady(normalized)
-                } catch (e) {
-                    console.warn("Screenshot: Failed to parse monitors: " + e.message)
-                    root.errorOccurred("Failed to parse monitors")
-                }
-            } else {
-                console.warn("Screenshot: Failed to fetch monitors")
-                root.errorOccurred("Failed to fetch monitors")
-            }
-        }
-    }
-
-    // Process for fetching windows
-    property Process clientsProcess: Process {
-        id: clientsProcess
-        command: ["axctl", "window", "list"]
-        stdout: StdioCollector {}
-        onExited: exitCode => {
-            if (exitCode === 0) {
-                try {
-                    var allClients = JSON.parse(clientsProcess.stdout.text)
-                    var activeIds = root._activeWorkspaceIds
-                    var normalizedClients = allClients.map(c => ({
-                        id: c.id,
-                        app_id: c.app_id,
-                        title: c.title,
-                        is_floating: c.is_floating,
-                        is_focused: c.is_focused,
-                        is_fullscreen: c.is_fullscreen,
-                        is_hidden: c.is_hidden,
-                        workspace_id: c.workspace_id,
-                        pinned: c.metadata ? c.metadata.pinned : false,
-                        workspace: { id: c.workspace_id },
-                        at: [c.metadata ? c.metadata.x : 0, c.metadata ? c.metadata.y : 0],
-                        size: [c.metadata ? c.metadata.width : 0, c.metadata ? c.metadata.height : 0]
-                    }))
-                    
-                    var filteredClients = normalizedClients.filter(c => {
-                        return c.pinned || (activeIds.length > 0 && activeIds.includes(c.workspace.id))
-                    })
-                    root.windowListReady(filteredClients)
-                } catch (e) {
-                    console.warn("Screenshot: Error processing windows: " + e.message)
-                }
-            }
-        }
     }
 
     property Process openScreenshotsProcess: Process {

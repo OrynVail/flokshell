@@ -41,8 +41,8 @@ ActionGrid {
         },
         {
             icon: Icons.logout,
-            tooltip: "Exit AxctlService",
-            command: "axctl system exit"
+            tooltip: "Exit Hyprland",
+            dispatch: "exit"
         },
         {
             icon: Icons.reboot,
@@ -58,7 +58,9 @@ ActionGrid {
 
     onActionTriggered: action => {
         console.log("Action triggered:", action.command);
-        if (action.command) {
+        if (action.dispatch) {
+            CompositorService.dispatch(action.dispatch);
+        } else if (action.command) {
             actionProcess.command = ["/bin/bash", "-c", action.command];
             console.log("Starting process with command:", actionProcess.command);
             actionProcess.running = true;

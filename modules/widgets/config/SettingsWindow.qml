@@ -34,7 +34,7 @@ FloatingWindow {
     }
 
     function preparePlacement() {
-        const targetScreen = screenByName(GlobalStates.settingsTargetScreenName || AxctlService.focusedMonitor?.name || "");
+        const targetScreen = screenByName(GlobalStates.settingsTargetScreenName || CompositorService.focusedMonitor?.name || "");
         if (targetScreen) {
             settingsWindow.screen = targetScreen;
         }
@@ -44,17 +44,17 @@ FloatingWindow {
     }
 
     function placeOnTargetWorkspace() {
-        const targetWorkspace = GlobalStates.settingsTargetWorkspaceId || AxctlService.focusedMonitor?.activeWorkspace?.id || AxctlService.focusedWorkspace?.id || 0;
+        const targetWorkspace = GlobalStates.settingsTargetWorkspaceId || CompositorService.focusedMonitor?.activeWorkspace?.id || CompositorService.focusedWorkspace?.id || 0;
         if (!targetWorkspace) return false;
 
-        const clients = AxctlService.clients.values || [];
+        const clients = CompositorService.clients.values || [];
         for (let i = 0; i < clients.length; i++) {
             const client = clients[i];
             if (client.title === settingsWindow.title) {
                 if (client.workspace?.id !== targetWorkspace) {
-                    AxctlService.dispatch(`movetoworkspacesilent ${targetWorkspace}, address:${client.address}`);
+                    CompositorService.dispatch(`movetoworkspacesilent ${targetWorkspace}, address:${client.address}`);
                 }
-                AxctlService.dispatch(`focuswindow address:${client.address}`);
+                CompositorService.dispatch(`focuswindow address:${client.address}`);
                 return true;
             }
         }

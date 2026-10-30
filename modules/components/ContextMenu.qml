@@ -2,7 +2,6 @@ import QtQuick
 import QtQuick.Controls
 import Quickshell
 import Quickshell.Wayland
-import Quickshell.Io
 import qs.modules.theme
 import qs.modules.components
 import qs.modules.services
@@ -45,26 +44,15 @@ PanelWindow {
         }
     }
 
-    Process {
-        id: cursorPos
-        running: false
-        command: ["axctl", "system", "get-cursor-position"]
-        
-        stdout: StdioCollector {
-            onStreamFinished: {
-                let coords = text.trim().split(",");
-                if (coords.length === 2) {
-                    let x = parseInt(coords[0].trim());
-                    let y = parseInt(coords[1].trim());
-                    menu.x = x;
-                    menu.y = y;
-                    menu.visible = false;
-                    Qt.callLater(() => {
-                        menu.popup();
-                    });
-                }
-            }
-        }
+    function popupAtCursor() {
+        CompositorService.cursorPos(pos => {
+            if (!pos || pos.x === undefined)
+                return;
+            menu.x = pos.x;
+            menu.y = pos.y;
+            menu.visible = false;
+            Qt.callLater(() => menu.popup());
+        });
     }
 
     Item {
@@ -227,7 +215,7 @@ PanelWindow {
         menuType = "";
         visible = true;
         WlrLayershell.keyboardFocus = WlrKeyboardFocus.Exclusive;
-        cursorPos.running = true;
+        popupAtCursor();
     }
 
     function openCustomMenu(items, width, height, type) {
@@ -242,7 +230,7 @@ PanelWindow {
         if (menuType === "player") {
             Visibilities.playerMenuOpen = true;
         }
-        cursorPos.running = true;
+        popupAtCursor();
     }
 
     function close() {

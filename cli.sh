@@ -204,10 +204,6 @@ find_flokshell_pid_cached() {
 }
 
 restart_flokshell() {
-	# Kill axctl processes first (they survive parent death when forked/detached)
-	pkill -f "axctl.*daemon" 2>/dev/null || true
-	pkill -f "axctl subscribe" 2>/dev/null || true
-
 	PID=$(find_flokshell_pid_cached)
 	if [ -n "$PID" ]; then
 		echo "Stopping Flokshell (PID $PID)..."
@@ -274,10 +270,6 @@ reload)
 	restart_flokshell
 	;;
 quit)
-	# Kill axctl processes first
-	pkill -f "axctl.*daemon" 2>/dev/null || true
-	pkill -f "axctl subscribe" 2>/dev/null || true
-
 	PID=$(find_flokshell_pid_cached)
 	if [ -n "$PID" ]; then
 		echo "Stopping Flokshell (PID $PID)..."
@@ -288,22 +280,16 @@ quit)
 	;;
 screen)
 	SUB="${2:-}"
-	if [ "$SUB" = "off" ]; then
-		if command -v hyprctl &>/dev/null; then
-			hyprctl dispatch dpms off
-		else
-			notify-send "Screen Off" "Not supported on this compositor yet"
-		fi
-	elif [ "$SUB" = "on" ]; then
-		if command -v hyprctl &>/dev/null; then
-			hyprctl dispatch dpms on
-		else
-			notify-send "Screen On" "Not supported on this compositor yet"
-		fi
-	else
+	if [ "$SUB" != "on" ] && [ "$SUB" != "off" ]; then
 		echo "Usage: flok screen [on|off]"
 		exit 1
 	fi
+	if ! command -v hyprctl &>/dev/null; then
+		notify-send "Screen $SUB" "Not supported on this compositor yet"
+		exit 1
+	fi
+	# Lua dispatchers from Hyprland 0.55; the legacy grammar before that.
+	hyprctl dispatch "hl.dsp.dpms({ action = \"$SUB\" })" | grep -qx ok || hyprctl dispatch dpms "$SUB"
 	;;
 suspend)
 	if command -v systemctl &>/dev/null; then

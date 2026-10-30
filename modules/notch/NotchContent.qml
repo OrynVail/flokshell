@@ -24,7 +24,7 @@ Item {
 
     // Get this screen's visibility state
     readonly property var screenVisibilities: Visibilities.getForScreen(screen.name)
-    readonly property bool isScreenFocused: AxctlService.focusedMonitor && AxctlService.focusedMonitor.name === screen.name
+    readonly property bool isScreenFocused: CompositorService.focusedMonitor && CompositorService.focusedMonitor.name === screen.name
 
     readonly property string notchPosition: Config.notchPosition !== undefined ? Config.notchPosition : "top"
 
@@ -60,8 +60,8 @@ Item {
 
     // Windows on this monitor's active workspace — keepHidden only tucks the notch
     // away when there is actually something for it to get out of the way of
-    readonly property var compositorMonitor: AxctlService.monitorFor(screen)
-    readonly property var toplevels: (!compositorMonitor || !compositorMonitor.activeWorkspace || !AxctlService.clients.values) ? [] : AxctlService.clients.values.filter(c => c.workspace.id === compositorMonitor.activeWorkspace.id)
+    readonly property var compositorMonitor: CompositorService.monitorFor(screen)
+    readonly property var toplevels: (!compositorMonitor || !compositorMonitor.activeWorkspace || !CompositorService.clients.values) ? [] : CompositorService.clients.values.filter(c => c.workspace.id === compositorMonitor.activeWorkspace.id)
     readonly property bool hasWindows: toplevels.length > 0
 
     // The notch is the only panel now, so it answers to nothing but its own config.

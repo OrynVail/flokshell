@@ -9,6 +9,7 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::mpsc;
 
 use crate::bus::{Bus, Change, Request};
+use crate::hyprconf::{self, Payload};
 use crate::hyprland::{self, Instance};
 
 const SERVICE: &str = "compositor";
@@ -223,6 +224,8 @@ impl Dirty {
 enum Event {
     Title { address: String, title: String },
     Dirty(Dirty),
+    // The user's config ran again, dropping whatever was applied at runtime.
+    Reloaded,
     Ignore,
 }
 
@@ -252,13 +255,14 @@ fn classify(line: &str) -> Event {
         "openwindow" | "closewindow" | "movewindowv2" | "fullscreen" => d(true, true, false),
         "workspacev2" | "focusedmonv2" | "createworkspacev2" | "destroyworkspacev2"
         | "moveworkspacev2" | "renameworkspace" | "activespecialv2" => d(false, true, true),
-        "monitoraddedv2" | "monitorremovedv2" | "configreloaded" => Event::Dirty(Dirty::ALL),
+        "monitoraddedv2" | "monitorremovedv2" => Event::Dirty(Dirty::ALL),
+        "configreloaded" => Event::Reloaded,
         // v1 twins of the events above, sent alongside them.
         "windowtitle" | "activewindow" | "movewindow" | "workspace" | "focusedmon"
         | "createworkspace" | "destroyworkspace" | "moveworkspace" | "activespecial"
         | "monitoradded" | "monitorremoved" => Event::Ignore,
-        "activelayout" | "submap" | "screencast" | "screencastv2" | "bell" | "urgent" | "openlayer"
-        | "closelayer" | "lockgroups" | "ignoregrouplock" | "custom" => Event::Ignore,
+        "activelayout" | "submap" | "screencast" | "screencastv2" | "bell" | "urgent"
+        | "openlayer" | "closelayer" | "lockgroups" | "ignoregrouplock" | "custom" => Event::Ignore,
         _ => {
             tracing::debug!(event = name, "unrecognised, refetching everything");
             Event::Dirty(Dirty::ALL)
@@ -311,6 +315,7 @@ enum Action {
         address: String,
     },
     ToggleSpecial(Option<String>),
+    Exit,
 }
 
 fn address(target: &str) -> Option<String> {
@@ -375,6 +380,7 @@ fn parse(cmd: &str) -> Option<Action> {
         "togglespecialworkspace" => Some(Action::ToggleSpecial(
             (!rest.is_empty()).then(|| selector(rest)).flatten(),
         )),
+        "exit" if rest.is_empty() => Some(Action::Exit),
         _ => None,
     }
 }
@@ -468,6 +474,8 @@ fn render(
             Some(n) => format!("togglespecialworkspace {n}"),
             None => "togglespecialworkspace".to_string(),
         },
+        (Action::Exit, true) => "hl.dsp.exit()".to_string(),
+        (Action::Exit, false) => "exit".to_string(),
     })
 }
 
@@ -491,9 +499,60 @@ struct Cache {
     client_monitor: BTreeMap<String, i64>,
 }
 
+// What the shell asked to hold at runtime. A config reload drops it all, so it
+// is applied again after every one.
+#[derive(Default)]
+struct Overrides {
+    layout: Option<String>,
+    gamemode: bool,
+}
+
+const GAMEMODE_LUA: &str = "hl.config({ animations = { enabled = false }, \
+    general = { gaps_in = 0, gaps_out = 0, border_size = 1 }, \
+    decoration = { rounding = 0, shadow = { enabled = false }, blur = { enabled = false } } })";
+const GAMEMODE_LEGACY: &str = "[[BATCH]]keyword animations:enabled 0;\
+    keyword decoration:shadow:enabled 0;keyword decoration:blur:enabled 0;\
+    keyword general:gaps_in 0;keyword general:gaps_out 0;\
+    keyword general:border_size 1;keyword decoration:rounding 0";
+
+fn layout_name(s: &str) -> Option<String> {
+    (!s.is_empty() && s.chars().all(|c| c.is_ascii_lowercase())).then(|| s.to_string())
+}
+
+fn config_dir() -> std::path::PathBuf {
+    std::env::var("XDG_CONFIG_HOME")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| {
+            std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".config")
+        })
+        .join("hypr")
+}
+
+// Temp and rename, so Hyprland never reads half a file; untouched when the
+// content is the same, so an unchanged setting costs no reload.
+async fn write_if_changed(path: &std::path::Path, content: &str) -> Result<bool> {
+    if tokio::fs::read_to_string(path).await.ok().as_deref() == Some(content) {
+        return Ok(false);
+    }
+    if let Some(dir) = path.parent() {
+        tokio::fs::create_dir_all(dir).await?;
+    }
+    let tmp = path.with_extension("tmp");
+    tokio::fs::write(&tmp, content).await?;
+    tokio::fs::rename(&tmp, path).await?;
+    Ok(true)
+}
+
+#[derive(Default)]
+struct Outcome {
+    dirty: Dirty,
+    refreshed: bool,
+}
+
 pub struct Service {
     bus: Bus,
     cache: Cache,
+    overrides: Overrides,
 }
 
 impl Service {
@@ -501,6 +560,7 @@ impl Service {
         Self {
             bus,
             cache: Cache::default(),
+            overrides: Overrides::default(),
         }
     }
 
@@ -521,6 +581,8 @@ impl Service {
                 tokio::select! {
                     _ = &mut deadline => break,
                     req = requests.recv() => match req {
+                        // Held settings still count; they are applied on connect.
+                        Some(r) if matches!(r.cmd.as_str(), "layout" | "gamemode") => self.hold(&r),
                         Some(r) => tracing::debug!(cmd = %r.cmd, "no compositor, dropped"),
                         None => return,
                     },
@@ -538,38 +600,54 @@ impl Service {
         let mut events = BufReader::new(hypr.events().await?).lines();
         // Everything, against whatever survived from the last instance.
         self.refresh(hypr, Dirty::ALL).await?;
+        self.reapply(hypr, lua).await;
 
         loop {
-            let mut dirty = Dirty::default();
+            let mut outcome = Outcome::default();
             let mut titles = Vec::new();
+            let mut reloaded = false;
             tokio::select! {
                 line = events.next_line() => {
                     let Some(line) = line? else { bail!("event socket closed") };
-                    self.take(&line, &mut dirty, &mut titles);
+                    self.take(&line, &mut outcome.dirty, &mut titles, &mut reloaded);
                     // Drain what has already arrived, so a burst costs one refetch.
                     while let Some(next) = events.next_line().now_or_never() {
                         let Some(line) = next? else { bail!("event socket closed") };
-                        self.take(&line, &mut dirty, &mut titles);
+                        self.take(&line, &mut outcome.dirty, &mut titles, &mut reloaded);
                     }
                 }
                 req = requests.recv() => {
                     let Some(req) = req else { return Ok(()) };
-                    dirty = self.handle(hypr, lua, req).await;
+                    outcome = self.handle(hypr, lua, req).await;
                 }
             }
-            if !titles.is_empty() && !dirty.clients {
+            if reloaded {
+                self.reapply(hypr, lua).await;
+                outcome.dirty = Dirty::ALL;
+            }
+            if !titles.is_empty() && !outcome.dirty.clients {
                 self.patch_titles(titles);
             }
-            if dirty.any() {
-                self.refresh(hypr, dirty).await?;
+            if outcome.dirty.any() {
+                self.refresh(hypr, outcome.dirty).await?;
+            }
+            if outcome.refreshed {
+                self.bus.event(SERVICE, "refreshed", &Value::Null);
             }
         }
     }
 
-    fn take(&self, line: &str, dirty: &mut Dirty, titles: &mut Vec<(String, String)>) {
+    fn take(
+        &self,
+        line: &str,
+        dirty: &mut Dirty,
+        titles: &mut Vec<(String, String)>,
+        reloaded: &mut bool,
+    ) {
         match classify(line) {
             Event::Title { address, title } => titles.push((address, title)),
             Event::Dirty(d) => dirty.merge(d),
+            Event::Reloaded => *reloaded = true,
             Event::Ignore => {}
         }
     }
@@ -669,24 +747,110 @@ impl Service {
         Ok(())
     }
 
+    fn hold(&mut self, req: &Request) {
+        match req.cmd.as_str() {
+            "layout" => {
+                self.overrides.layout = layout_name(req.args["name"].as_str().unwrap_or(""))
+            }
+            "gamemode" => self.overrides.gamemode = req.args["on"].as_bool().unwrap_or(false),
+            _ => {}
+        }
+    }
+
+    async fn reapply(&self, hypr: &Instance, lua: bool) {
+        if let Some(layout) = &self.overrides.layout {
+            let result = match lua {
+                true => {
+                    hypr.eval(&format!(
+                        "hl.config({{ general = {{ layout = \"{layout}\" }} }})"
+                    ))
+                    .await
+                }
+                false => {
+                    hypr.keyword(&format!("keyword general:layout {layout}"))
+                        .await
+                }
+            };
+            if let Err(e) = result {
+                tracing::warn!(layout, "layout refused: {e:#}");
+            }
+        }
+        if self.overrides.gamemode {
+            let result = match lua {
+                true => hypr.eval(GAMEMODE_LUA).await,
+                false => hypr.keyword(GAMEMODE_LEGACY).await,
+            };
+            if let Err(e) = result {
+                tracing::warn!("game mode refused: {e:#}");
+            }
+        }
+    }
+
     // Whatever a dispatch moved shows up through events, except geometry,
     // which Hyprland never announces; the refetch after it is what keeps an
     // open overview honest.
-    async fn handle(&mut self, hypr: &Instance, lua: bool, req: Request) -> Dirty {
+    async fn handle(&mut self, hypr: &Instance, lua: bool, req: Request) -> Outcome {
         match req.cmd.as_str() {
-            "refresh" => Dirty::ALL,
+            "refresh" => Outcome {
+                dirty: Dirty::ALL,
+                refreshed: true,
+            },
             "dispatch" => {
                 let raw = req.args["cmd"].as_str().unwrap_or("");
                 if let Err(e) = self.dispatch(hypr, lua, raw).await {
                     tracing::warn!(cmd = raw, "dispatch refused: {e:#}");
                 }
-                Dirty::ALL
+                Outcome {
+                    dirty: Dirty::ALL,
+                    refreshed: false,
+                }
+            }
+            "cursor" => {
+                match hypr.json::<Value>("cursorpos").await {
+                    Ok(pos) => self.bus.event(SERVICE, "cursor", &pos),
+                    Err(e) => tracing::warn!("cursor position: {e:#}"),
+                }
+                Outcome::default()
+            }
+            "layout" | "gamemode" => {
+                let was_on = self.overrides.gamemode;
+                self.hold(&req);
+                // Leaving game mode is the user's config, whole: reload it, and
+                // the reload puts the held layout back.
+                if req.cmd == "gamemode" && was_on && !self.overrides.gamemode {
+                    if let Err(e) = hypr.request("reload").await {
+                        tracing::warn!("reload: {e:#}");
+                    }
+                } else {
+                    self.reapply(hypr, lua).await;
+                }
+                Outcome::default()
+            }
+            "config" => {
+                if let Err(e) = self.write_config(hypr, &req.args).await {
+                    tracing::warn!("compositor config: {e:#}");
+                }
+                Outcome::default()
             }
             other => {
                 tracing::warn!(cmd = other, "unknown command");
-                Dirty::default()
+                Outcome::default()
             }
         }
+    }
+
+    // Both dialects are written whatever this Hyprland speaks: the file is
+    // for whoever includes it, and a reload only follows a real change.
+    async fn write_config(&self, hypr: &Instance, args: &Value) -> Result<()> {
+        let payload: Payload = serde_json::from_value(args.clone())?;
+        let dir = config_dir();
+        let lua = write_if_changed(&dir.join("flokshell.lua"), &hyprconf::lua(&payload)).await?;
+        let conf = write_if_changed(&dir.join("flokshell.conf"), &hyprconf::conf(&payload)).await?;
+        if lua || conf {
+            tracing::info!(dir = %dir.display(), "compositor config written");
+            hypr.request("reload").await?;
+        }
+        Ok(())
     }
 
     async fn dispatch(&self, hypr: &Instance, lua: bool, raw: &str) -> Result<()> {
@@ -902,6 +1066,25 @@ mod tests {
     }
 
     #[test]
+    fn layouts_are_bare_names() {
+        assert_eq!(layout_name("scrolling"), Some("scrolling".into()));
+        assert_eq!(layout_name("dwindle\" } }) hl.dsp.exit() --"), None);
+        assert_eq!(layout_name(""), None);
+    }
+
+    #[tokio::test]
+    async fn config_is_written_only_when_it_changes() {
+        let dir = std::env::temp_dir().join(format!("flokd-test-{}", std::process::id()));
+        let path = dir.join("flokshell.lua");
+        assert!(write_if_changed(&path, "a").await.unwrap());
+        assert!(!write_if_changed(&path, "a").await.unwrap());
+        assert!(write_if_changed(&path, "b").await.unwrap());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "b");
+        assert!(!path.with_extension("tmp").exists());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn percentages_resolve_against_the_window_monitor() {
         let mv = parse("movewindowpixel exact 50% 25%, address:0xabc").unwrap();
         let second = |_: &str| Some(monitor(1920, 2560, 1440, 1.25, 0));
@@ -945,7 +1128,11 @@ mod tests {
                 println!("{:>6.1?} burst: {lines} lines, {} bytes", at, msg.len());
                 for l in msg.lines() {
                     let v: Value = serde_json::from_str(l).unwrap();
-                    println!("         {} {}", v["event"], v["key"].as_str().unwrap_or(""));
+                    println!(
+                        "         {} {}",
+                        v["event"],
+                        v["key"].as_str().unwrap_or("")
+                    );
                 }
             }
         }

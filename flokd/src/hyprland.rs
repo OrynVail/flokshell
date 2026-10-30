@@ -81,6 +81,30 @@ impl Instance {
         Ok(())
     }
 
+    // Runtime config for a Lua Hyprland: anything but "ok" names what it refused.
+    pub async fn eval(&self, lua: &str) -> Result<()> {
+        let reply = self.request(&format!("eval {lua}")).await?;
+        let reply = reply.trim();
+        if reply != "ok" {
+            bail!("{reply}");
+        }
+        Ok(())
+    }
+
+    // The legacy keyword grammar, alone or as a [[BATCH]]; each line answers
+    // for itself, so any one refusal fails it.
+    pub async fn keyword(&self, cmd: &str) -> Result<()> {
+        let reply = self.request(cmd).await?;
+        if let Some(bad) = reply
+            .lines()
+            .map(str::trim)
+            .find(|l| !l.is_empty() && *l != "ok")
+        {
+            bail!("{bad}");
+        }
+        Ok(())
+    }
+
     pub async fn events(&self) -> Result<UnixStream> {
         UnixStream::connect(self.dir.join(".socket2.sock"))
             .await

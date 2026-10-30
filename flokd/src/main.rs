@@ -3,6 +3,7 @@ mod config;
 mod dbus;
 mod ddc;
 mod http;
+mod hyprconf;
 mod hyprland;
 mod notify;
 mod services;

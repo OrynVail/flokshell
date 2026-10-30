@@ -1,427 +1,227 @@
 import QtQuick
 import Quickshell
-import Quickshell.Io
 import qs.modules.services
 import qs.config
 import qs.modules.theme
-import qs.modules.bar
 import qs.modules.globals
+import "../../config/KeybindActions.js" as KeybindActions
 
+// Turns the shell's compositor settings and binds into what flokd renders as
+// ~/.config/hypr/flokshell.{lua,conf}, and holds the live layout choice.
 QtObject {
     id: root
 
-    property Process compositorProcess: Process {}
-
-    property var currentAnimationConfig: null
-    property int animationsAttempts: 0
-
-    // Early reads land before the daemon binds its socket, and axctl prints a
-    // plain-text connection error to stdout. A race, not bad data — retry.
-    property Timer retryAnimationsTimer: Timer {
-        interval: 500
-        repeat: false
-        onTriggered: root.readAnimationsProcess.running = true
-    }
-
-    property Process readAnimationsProcess: Process {
-        command: ["axctl", "config", "get-animations"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                const raw = (text ?? "").trim();
-
-                if (raw === "" || !raw.startsWith("[")) {
-                    if (root.animationsAttempts < 10) {
-                        root.animationsAttempts++;
-                        root.retryAnimationsTimer.restart();
-                    } else {
-                        console.warn("CompositorConfig: gave up reading animations:", raw);
-                    }
-                    return;
-                }
-
-                try {
-                    const parsed = JSON.parse(raw);
-                    if (Array.isArray(parsed) && parsed.length > 0) {
-                        // axctl config get-animations returns [animations, beziers]
-                        currentAnimationConfig = parsed;
-                        root.animationsAttempts = 0;
-                    }
-                } catch (e) {
-                    console.error("CompositorConfig: Error parsing animations:", e);
-                }
-            }
-        }
-    }
-
-    property var barInstances: []
-
-    function registerBar(barInstance) {
-        barInstances.push(barInstance);
-    }
-
-    function getBarOrientation() {
-        if (barInstances.length > 0) {
-            return barInstances[0].orientation || "horizontal";
-        }
+    function vertical() {
         const position = Config.notchPosition || "top";
-        return (position === "left" || position === "right") ? "vertical" : "horizontal";
+        return position === "left" || position === "right";
     }
 
-    property Timer applyTimer: Timer {
-        interval: 100
-        repeat: false
-        onTriggered: applyCompositorConfigInternal()
-    }
-
-    function getColorValue(colorName) {
-        const resolved = Config.resolveColor(colorName);
-        // Convert HEX string to color, or return if already a color.
+    function colorOf(name) {
+        const resolved = Config.resolveColor(name);
         return (typeof resolved === 'string') ? Qt.color(resolved) : resolved;
     }
 
-    function formatColorForCompositor(color) {
-        // AxctlService expects colors in format: rgb(rrggbb) or rgba(rrggbbaa)
-        const r = Math.round(color.r * 255).toString(16).padStart(2, '0');
-        const g = Math.round(color.g * 255).toString(16).padStart(2, '0');
-        const b = Math.round(color.b * 255).toString(16).padStart(2, '0');
-        const a = Math.round(color.a * 255).toString(16).padStart(2, '0');
-
-        if (color.a === 1.0) {
-            return `rgb(${r}${g}${b})`;
-        } else {
-            return `rgba(${r}${g}${b}${a})`;
-        }
+    function hyprColor(c) {
+        const hex = v => Math.round(v * 255).toString(16).padStart(2, '0');
+        return c.a === 1.0 ? `rgb(${hex(c.r)}${hex(c.g)}${hex(c.b)})` : `rgba(${hex(c.r)}${hex(c.g)}${hex(c.b)}${hex(c.a)})`;
     }
 
-    function applyCompositorConfig() {
-        readAnimationsProcess.running = true;
-        applyTimer.restart();
+    function opaque(c) {
+        return Qt.rgba(c.r, c.g, c.b, 1.0);
     }
 
-    function applyCompositorConfigInternal() {
-        // Ensure adapters are loaded before applying config.
-        if (!Config.loader.loaded) {
-            console.log("CompositorConfig: Esperando que se cargue Config...");
-            return;
+    function ignoreAlpha() {
+        if (Config.compositor.blurExplicitIgnoreAlpha)
+            return Config.compositor.blurIgnoreAlphaValue;
+        const bar = (Config.theme.srBarBg && Config.theme.srBarBg.opacity !== undefined) ? Config.theme.srBarBg.opacity : 0;
+        const bg = (Config.theme.srBg && Config.theme.srBg.opacity !== undefined) ? Config.theme.srBg.opacity : 1.0;
+        return bar > 0 ? Math.min(bar, bg) : bg;
+    }
+
+    function binds() {
+        let out = [];
+        let seen = {};
+        if (!Config.keybindsLoader.loaded || !Config.keybindsLoader.adapter)
+            return out;
+        const adapter = Config.keybindsLoader.adapter;
+
+        function push(modifiers, key, action) {
+            const resolved = KeybindActions.resolveAction(action);
+            if (!resolved || !key || String(key).trim().length === 0)
+                return;
+            let dispatcher = resolved.dispatcher || "";
+            let arg = resolved.argument || "";
+            if (dispatcher === "layoutmsg" && arg.indexOf("focus ") === 0) {
+                dispatcher = "movefocus";
+                arg = arg.split(" ")[1] || "";
+            } else if (dispatcher === "layoutmsg" && arg.indexOf("movewindowto ") === 0) {
+                dispatcher = "movewindow";
+                arg = arg.split(" ")[1] || "";
+            }
+            const bind = { mods: modifiers || [], key: String(key), dispatcher: dispatcher, arg: arg, flags: resolved.flags || "" };
+            // The same action twice on a key would fire twice per press.
+            const id = JSON.stringify(bind);
+            if (seen[id])
+                return;
+            seen[id] = true;
+            out.push(bind);
         }
 
-        // Wait for layout to be ready.
-        if (!GlobalStates.compositorLayoutReady) {
-            console.log("CompositorConfig: Esperando que se detecte el layout de AxctlService...");
-            return;
+        function core(keybind) {
+            if (keybind)
+                push(keybind.modifiers, keybind.key, keybind.action || keybind);
         }
 
-        // Determine active colors.
-        let activeColorFormatted = "";
-        // Force compositorBorderColor if syncBorderColor is enabled, otherwise use configured list (supports gradients).
-        const borderColors = Config.compositor.syncBorderColor ? null : Config.compositor.activeBorderColor;
-
-        if (borderColors && borderColors.length > 1) {
-            // Multi-color gradient.
-            const formattedColors = borderColors.map(colorName => {
-                const color = getColorValue(colorName);
-                return formatColorForCompositor(color);
-            }).join(" ");
-            activeColorFormatted = `${formattedColors} ${Config.compositor.borderAngle}deg`;
-        } else {
-            // Single color: if sync enabled or empty, use compositorBorderColor; otherwise use first element.
-            const singleColorName = (borderColors && borderColors.length === 1) ? borderColors[0] : Config.compositorBorderColor;
-            const activeColor = getColorValue(singleColorName);
-            activeColorFormatted = formatColorForCompositor(activeColor);
-        }
-
-        // Determine inactive colors.
-        let inactiveColorFormatted = "";
-        const inactiveBorderColors = Config.compositor.inactiveBorderColor;
-
-        if (inactiveBorderColors && inactiveBorderColors.length > 1) {
-            // Multi-color gradient.
-            const formattedColors = inactiveBorderColors.map(colorName => {
-                const color = getColorValue(colorName);
-                const colorWithFullOpacity = Qt.rgba(color.r, color.g, color.b, 1.0);
-                return formatColorForCompositor(colorWithFullOpacity);
-            }).join(" ");
-            inactiveColorFormatted = `${formattedColors} ${Config.compositor.inactiveBorderAngle}deg`;
-        } else {
-            // Single color.
-            const singleColorName = (inactiveBorderColors && inactiveBorderColors.length === 1) ? inactiveBorderColors[0] : "surface";
-            const inactiveColor = getColorValue(singleColorName);
-            const inactiveColorWithFullOpacity = Qt.rgba(inactiveColor.r, inactiveColor.g, inactiveColor.b, 1.0);
-            inactiveColorFormatted = formatColorForCompositor(inactiveColorWithFullOpacity);
-        }
-
-        // Shadow colors.
-        const shadowColor = getColorValue(Config.compositorShadowColor);
-        const shadowColorInactive = getColorValue(Config.compositor.shadowColorInactive);
-        const shadowColorWithOpacity = Qt.rgba(shadowColor.r, shadowColor.g, shadowColor.b, shadowColor.a * Config.compositorShadowOpacity);
-        const shadowColorInactiveWithOpacity = Qt.rgba(shadowColorInactive.r, shadowColorInactive.g, shadowColorInactive.b, shadowColorInactive.a * Config.compositorShadowOpacity);
-        const shadowColorFormatted = formatColorForCompositor(shadowColorWithOpacity);
-        const shadowColorInactiveFormatted = formatColorForCompositor(shadowColorInactiveWithOpacity);
-
-        const barOrientation = getBarOrientation();
-        let speed = 2.5;
-        let bezier = "default";
-        
-        if (currentAnimationConfig && currentAnimationConfig[0]) {
-            const workspaceAnim = currentAnimationConfig[0].find(anim => anim.name === "workspaces");
-            if (workspaceAnim) {
-                speed = workspaceAnim.speed || speed;
-                bezier = workspaceAnim.bezier || bezier;
+        const flokshell = adapter.flokshell;
+        if (flokshell) {
+            for (const name of ["launcher", "dashboard", "clipboard", "emoji", "notes", "tmux", "wallpapers"])
+                core(flokshell[name]);
+            if (flokshell.system) {
+                for (const name of ["overview", "powermenu", "config", "lockscreen", "tools", "screenshot", "screenrecord", "lens", "reload", "quit"])
+                    core(flokshell.system[name]);
             }
         }
 
-        const workspacesAnimation = barOrientation === "vertical" ? `slidefadevert 20%` : `slidefade 20%`;
-        const workspaceCommand = `keyword animation workspaces,1,${speed},${bezier},${workspacesAnimation}`;
-
-        // Calculate ignorealpha.
-        let ignoreAlphaValue = 0.0;
-
-        if (Config.compositor.blurExplicitIgnoreAlpha) {
-            ignoreAlphaValue = Config.compositor.blurIgnoreAlphaValue.toFixed(2);
-        } else {
-            // Dynamic ignorealpha based on StyledRect opacity.
-            // Use min(barbg, bg) opacity if barbg > 0, else use bg.
-            const barBgOpacity = (Config.theme.srBarBg && Config.theme.srBarBg.opacity !== undefined) ? Config.theme.srBarBg.opacity : 0;
-            const bgOpacity = (Config.theme.srBg && Config.theme.srBg.opacity !== undefined) ? Config.theme.srBg.opacity : 1.0;
-            ignoreAlphaValue = (barBgOpacity > 0 ? Math.min(barBgOpacity, bgOpacity) : bgOpacity).toFixed(2);
-            console.log(`CompositorConfig: Auto ignorealpha calculated: ${ignoreAlphaValue} (bg: ${bgOpacity}, bar: ${barBgOpacity})`);
+        for (const bind of (adapter.custom || [])) {
+            if (!bind || bind.enabled === false)
+                continue;
+            if (bind.keys && bind.actions) {
+                for (const k of bind.keys) {
+                    if (!k || !k.key)
+                        continue;
+                    for (const action of bind.actions) {
+                        if (action && action.layouts && action.layouts.length > 0 && action.layouts.indexOf(GlobalStates.compositorLayout) === -1)
+                            continue;
+                        push(k.modifiers, k.key, action);
+                    }
+                }
+            } else {
+                push(bind.modifiers, bind.key, bind.action || bind);
+            }
         }
+        return out;
+    }
 
-        let batchCommand = "";
-        batchCommand += `keyword general:border_size ${Config.compositorBorderSize}`;
-        batchCommand += ` ; keyword general:gaps_in ${Config.compositor.gapsIn}`;
-        batchCommand += ` ; keyword general:gaps_out ${Config.compositor.gapsOut}`;
-        batchCommand += ` ; keyword general:col.active_border ${activeColorFormatted}`;
-        batchCommand += ` ; keyword general:col.inactive_border ${inactiveColorFormatted}`;
-        if (GlobalStates.compositorLayout) {
-            batchCommand += ` ; keyword general:layout ${GlobalStates.compositorLayout}`;
+    function payload() {
+        const active = Config.compositor.syncBorderColor ? [Config.compositorBorderColor] : (Config.compositor.activeBorderColor || ["primary"]);
+        const inactive = Config.compositor.inactiveBorderColor || ["surface"];
+        const shadow = colorOf(Config.compositorShadowColor);
+        const alpha = ignoreAlpha();
+        const shell = { blur: true, blurPopups: true, noAnim: true, ignoreAlpha: alpha };
+        return {
+            gapsIn: Config.compositor.gapsIn,
+            gapsOut: Config.compositor.gapsOut,
+            borderSize: Config.compositorBorderSize,
+            activeBorder: active.map(n => hyprColor(colorOf(n))),
+            activeAngle: Config.compositor.borderAngle,
+            inactiveBorder: inactive.map(n => hyprColor(opaque(colorOf(n)))),
+            inactiveAngle: Config.compositor.inactiveBorderAngle,
+            rounding: Config.compositorRounding,
+            blur: { enabled: Config.compositor.blurEnabled, size: Config.compositor.blurSize, passes: Config.compositor.blurPasses },
+            shadow: {
+                enabled: Config.compositor.shadowEnabled,
+                range: Config.compositor.shadowRange,
+                color: hyprColor(Qt.rgba(shadow.r, shadow.g, shadow.b, shadow.a * Config.compositorShadowOpacity))
+            },
+            layout: GlobalStates.compositorLayout || "",
+            workspaceStyle: vertical() ? "slidefadevert 20%" : "slidefade 20%",
+            binds: binds(),
+            layerRules: [
+                Object.assign({ namespace: "flokshell" }, shell),
+                Object.assign({ namespace: "flokshell:overview" }, shell),
+                { namespace: "quickshell:notificationPopup", blur: true, noAnim: true, ignoreAlpha: alpha }
+            ],
+            execOnce: ["flok"]
+        };
+    }
+
+    function send() {
+        if (Config.loader.loaded)
+            flokd.send("config", payload());
+        if (GlobalStates.compositorLayoutReady && GlobalStates.compositorLayout)
+            flokd.send("layout", { name: GlobalStates.compositorLayout });
+    }
+
+    function applyCompositorConfig() {
+        sendTimer.restart();
+    }
+
+    property Timer sendTimer: Timer {
+        interval: 100
+        onTriggered: root.send()
+    }
+
+    property FlokdSocket flokd: FlokdSocket {
+        service: "compositor"
+        onConnectionStateChanged: {
+            if (connected)
+                root.applyCompositorConfig();
         }
-        batchCommand += ` ; keyword decoration:rounding ${Config.compositorRounding}`;
-        batchCommand += ` ; keyword decoration:shadow:enabled ${Config.compositor.shadowEnabled}`;
-        batchCommand += ` ; keyword decoration:shadow:range ${Config.compositor.shadowRange}`;
-        batchCommand += ` ; keyword decoration:shadow:render_power ${Config.compositor.shadowRenderPower}`;
-        batchCommand += ` ; keyword decoration:shadow:sharp ${Config.compositor.shadowSharp}`;
-        batchCommand += ` ; keyword decoration:shadow:ignore_window ${Config.compositor.shadowIgnoreWindow}`;
-        batchCommand += ` ; keyword decoration:shadow:color ${shadowColorFormatted}`;
-        batchCommand += ` ; keyword decoration:shadow:color_inactive ${shadowColorInactiveFormatted}`;
-        batchCommand += ` ; keyword decoration:shadow:offset ${Config.compositor.shadowOffset}`;
-        batchCommand += ` ; keyword decoration:shadow:scale ${Config.compositor.shadowScale}`;
-        batchCommand += ` ; keyword decoration:blur:enabled ${Config.compositor.blurEnabled}`;
-        batchCommand += ` ; keyword decoration:blur:size ${Config.compositor.blurSize}`;
-        batchCommand += ` ; keyword decoration:blur:passes ${Config.compositor.blurPasses}`;
-        batchCommand += ` ; keyword decoration:blur:ignore_opacity ${Config.compositor.blurIgnoreOpacity}`;
-        batchCommand += ` ; keyword decoration:blur:new_optimizations ${Config.compositor.blurNewOptimizations}`;
-        batchCommand += ` ; keyword decoration:blur:xray ${Config.compositor.blurXray}`;
-        batchCommand += ` ; keyword decoration:blur:noise ${Config.compositor.blurNoise}`;
-        batchCommand += ` ; keyword decoration:blur:contrast ${Config.compositor.blurContrast}`;
-        batchCommand += ` ; keyword decoration:blur:brightness ${Config.compositor.blurBrightness}`;
-        batchCommand += ` ; keyword decoration:blur:vibrancy ${Config.compositor.blurVibrancy}`;
-        batchCommand += ` ; keyword decoration:blur:vibrancy_darkness ${Config.compositor.blurVibrancyDarkness}`;
-        batchCommand += ` ; keyword decoration:blur:special ${Config.compositor.blurSpecial}`;
-        batchCommand += ` ; keyword decoration:blur:popups ${Config.compositor.blurPopups}`;
-        batchCommand += ` ; keyword decoration:blur:popups_ignorealpha ${Config.compositor.blurPopupsIgnorealpha}`;
-        batchCommand += ` ; keyword decoration:blur:input_methods ${Config.compositor.blurInputMethods}`;
-        batchCommand += ` ; keyword decoration:blur:input_methods_ignorealpha ${Config.compositor.blurInputMethodsIgnorealpha}`;
-        batchCommand += ` ; keyword bezier myBezier,0.4,0.0,0.2,1.0`;
-        batchCommand += ` ; keyword animation windows,1,2.5,myBezier,popin 80%`;
-        batchCommand += ` ; keyword animation border,1,2.5,myBezier`;
-        batchCommand += ` ; keyword animation fade,1,2.5,myBezier`;
-        batchCommand += ` ; ${workspaceCommand}`;
-        // Note: workspaceCommand is dynamically calculated based on current animations and orientation.
-
-        console.log(`CompositorConfig: Applying ignorealpha: ${ignoreAlphaValue}, explicit: ${Config.compositor.blurExplicitIgnoreAlpha}`);
-        batchCommand += ` ; keyword layerrule noanim,quickshell ; keyword layerrule blur,quickshell ; keyword layerrule blurpopups,quickshell ; keyword layerrule ignorealpha ${ignoreAlphaValue},quickshell`;
-        console.log("CompositorConfig: Refreshing TOML via CompositorTomlWriter");
-        CompositorTomlWriter.refresh();
     }
 
     property Connections configConnections: Connections {
         target: Config.loader
-        function onFileChanged() {
-            applyCompositorConfig();
-        }
-        function onLoaded() {
-            applyCompositorConfig();
-        }
+        function onLoaded() { root.applyCompositorConfig(); }
+        function onFileChanged() { root.applyCompositorConfig(); }
     }
 
-    property Connections compositorConfigConnections: Connections {
-        target: Config.compositor
+    property Connections keybindsConnections: Connections {
+        target: Config.keybindsLoader
+        function onLoaded() { root.applyCompositorConfig(); }
+        function onFileChanged() { root.applyCompositorConfig(); }
+        function onAdapterUpdated() { root.applyCompositorConfig(); }
+    }
 
-        function onBorderSizeChanged() {
-            applyCompositorConfig();
-        }
-        function onRoundingChanged() {
-            applyCompositorConfig();
-        }
-        function onGapsInChanged() {
-            applyCompositorConfig();
-        }
-        function onGapsOutChanged() {
-            applyCompositorConfig();
-        }
-        function onActiveBorderColorChanged() {
-            applyCompositorConfig();
-        }
-        function onInactiveBorderColorChanged() {
-            applyCompositorConfig();
-        }
-        function onBorderAngleChanged() {
-            applyCompositorConfig();
-        }
-        function onInactiveBorderAngleChanged() {
-            applyCompositorConfig();
-        }
-        function onSyncRoundnessChanged() {
-            applyCompositorConfig();
-        }
-        function onSyncBorderWidthChanged() {
-            applyCompositorConfig();
-        }
-        function onSyncBorderColorChanged() {
-            applyCompositorConfig();
-        }
-        function onSyncShadowOpacityChanged() {
-            applyCompositorConfig();
-        }
-        function onSyncShadowColorChanged() {
-            applyCompositorConfig();
-        }
-        function onShadowEnabledChanged() {
-            applyCompositorConfig();
-        }
-        function onShadowRangeChanged() {
-            applyCompositorConfig();
-        }
-        function onShadowRenderPowerChanged() {
-            applyCompositorConfig();
-        }
-        function onShadowSharpChanged() {
-            applyCompositorConfig();
-        }
-        function onShadowIgnoreWindowChanged() {
-            applyCompositorConfig();
-        }
-        function onShadowColorChanged() {
-            applyCompositorConfig();
-        }
-        function onShadowColorInactiveChanged() {
-            applyCompositorConfig();
-        }
-        function onShadowOpacityChanged() {
-            applyCompositorConfig();
-        }
-        function onShadowOffsetChanged() {
-            applyCompositorConfig();
-        }
-        function onShadowScaleChanged() {
-            applyCompositorConfig();
-        }
-        function onBlurEnabledChanged() {
-            applyCompositorConfig();
-        }
-        function onBlurSizeChanged() {
-            applyCompositorConfig();
-        }
-        function onBlurPassesChanged() {
-            applyCompositorConfig();
-        }
-        function onBlurIgnoreOpacityChanged() {
-            applyCompositorConfig();
-        }
-        function onBlurExplicitIgnoreAlphaChanged() {
-            applyCompositorConfig();
-        }
-        function onBlurIgnoreAlphaValueChanged() {
-            applyCompositorConfig();
-        }
-        function onBlurNewOptimizationsChanged() {
-            applyCompositorConfig();
-        }
-        function onBlurXrayChanged() {
-            applyCompositorConfig();
-        }
-        function onBlurNoiseChanged() {
-            applyCompositorConfig();
-        }
-        function onBlurContrastChanged() {
-            applyCompositorConfig();
-        }
-        function onBlurBrightnessChanged() {
-            applyCompositorConfig();
-        }
-        function onBlurVibrancyChanged() {
-            applyCompositorConfig();
-        }
-        function onBlurVibrancyDarknessChanged() {
-            applyCompositorConfig();
-        }
-        function onBlurSpecialChanged() {
-            applyCompositorConfig();
-        }
-        function onBlurPopupsChanged() {
-            applyCompositorConfig();
-        }
-        function onBlurPopupsIgnorealphaChanged() {
-            applyCompositorConfig();
-        }
-        function onBlurInputMethodsChanged() {
-            applyCompositorConfig();
-        }
-        function onBlurInputMethodsIgnorealphaChanged() {
-            applyCompositorConfig();
-        }
+    property Connections compositorConnections: Connections {
+        target: Config.compositor
+        function onBorderSizeChanged() { root.applyCompositorConfig(); }
+        function onRoundingChanged() { root.applyCompositorConfig(); }
+        function onGapsInChanged() { root.applyCompositorConfig(); }
+        function onGapsOutChanged() { root.applyCompositorConfig(); }
+        function onActiveBorderColorChanged() { root.applyCompositorConfig(); }
+        function onInactiveBorderColorChanged() { root.applyCompositorConfig(); }
+        function onBorderAngleChanged() { root.applyCompositorConfig(); }
+        function onInactiveBorderAngleChanged() { root.applyCompositorConfig(); }
+        function onSyncRoundnessChanged() { root.applyCompositorConfig(); }
+        function onSyncBorderWidthChanged() { root.applyCompositorConfig(); }
+        function onSyncBorderColorChanged() { root.applyCompositorConfig(); }
+        function onSyncShadowOpacityChanged() { root.applyCompositorConfig(); }
+        function onSyncShadowColorChanged() { root.applyCompositorConfig(); }
+        function onShadowEnabledChanged() { root.applyCompositorConfig(); }
+        function onShadowRangeChanged() { root.applyCompositorConfig(); }
+        function onShadowColorChanged() { root.applyCompositorConfig(); }
+        function onShadowOpacityChanged() { root.applyCompositorConfig(); }
+        function onBlurEnabledChanged() { root.applyCompositorConfig(); }
+        function onBlurSizeChanged() { root.applyCompositorConfig(); }
+        function onBlurPassesChanged() { root.applyCompositorConfig(); }
+        function onBlurExplicitIgnoreAlphaChanged() { root.applyCompositorConfig(); }
+        function onBlurIgnoreAlphaValueChanged() { root.applyCompositorConfig(); }
     }
 
     property Connections colorsConnections: Connections {
         target: Colors
-        function onFileChanged() {
-            applyCompositorConfig();
-        }
-        function onLoaded() {
-            applyCompositorConfig();
-        }
+        function onFileChanged() { root.applyCompositorConfig(); }
+        function onLoaded() { root.applyCompositorConfig(); }
+    }
+
+    property Connections themeConnections: Connections {
+        target: Config.theme
+        function onSrBarBgChanged() { root.applyCompositorConfig(); }
+        function onSrBgChanged() { root.applyCompositorConfig(); }
+        function onShadowColorChanged() { root.applyCompositorConfig(); }
+        function onShadowOpacityChanged() { root.applyCompositorConfig(); }
     }
 
     property Connections barConnections: Connections {
         target: Config
-        function onNotchPositionChanged() {
-            applyCompositorConfig();
-        }
-    }
-
-    property Connections srBgConnections: Connections {
-        target: Config.theme.srBg
-        function onOpacityChanged() {
-            applyCompositorConfig();
-        }
-    }
-
-    property Connections srBarBgConnections: Connections {
-        target: Config.theme.srBarBg
-        function onOpacityChanged() {
-            applyCompositorConfig();
-        }
+        function onNotchPositionChanged() { root.applyCompositorConfig(); }
     }
 
     property Connections globalStatesConnections: Connections {
         target: GlobalStates
-        function onCompositorLayoutChanged() {
-            applyCompositorConfig();
-        }
-        function onCompositorLayoutReadyChanged() {
-            if (GlobalStates.compositorLayoutReady) {
-                applyCompositorConfig();
-            }
-        }
+        function onCompositorLayoutChanged() { root.applyCompositorConfig(); }
+        function onCompositorLayoutReadyChanged() { root.applyCompositorConfig(); }
     }
 
-
-    Component.onCompleted: {
-        // Apply immediately if Config is already loaded.
-        if (Config.loader.loaded) {
-            applyCompositorConfig();
-        }
-        // Otherwise, handled by onLoaded.
-    }
+    Component.onCompleted: applyCompositorConfig()
 }

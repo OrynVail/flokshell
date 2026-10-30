@@ -15,11 +15,14 @@ src/
 ├── dbus.rs              # shared system-bus helpers: calls, property reads, owner watch
 ├── ddc.rs               # DDC/CI over i2c-dev: EDID, VCP get/set
 ├── http.rs              # shared client builder, size-capped GET
+├── hyprconf.rs          # renders the shell's compositor payload as flokshell.lua and .conf
+├── hyprland.rs          # live instance discovery, request socket, event socket
 ├── notify.rs            # desktop notifications and their action clicks, session bus
 ├── wayland.rs           # one compositor connection: outputs, gamma, idle, screencopy; reconnects
 └── services/
     ├── bluetooth.rs     # BlueZ: adapter, devices, discovery, connects
     ├── brightness.rs    # backlight through logind, external displays over DDC/CI
+    ├── compositor.rs    # Hyprland state as keyed items, dispatch, game mode, layout, config writes
     ├── capture.rs       # frozen frames in memory: save, OCR, QR, Lens, colour pick
     ├── coverart.rs      # MPRIS art: URL, tags, sidecar, online; content-addressed cache
     ├── idle.rs          # idle listeners, caffeine, logind lock and sleep hooks with a delay lock
@@ -49,6 +52,17 @@ service parses its own commands, so adding one never touches dispatch.
 Every event is a **full-state replace for one service**, so receiving the same state twice is
 harmless. That is what lets a connecting client subscribe first and take the snapshot second
 with no gap, and lets a lagging client be resynced instead of replayed.
+
+A **keyed service** (`compositor`) is too large to resend whole, so each item is replaced on
+its own — still idempotent — and a burst ends with `commit`, which is when the client applies
+it. A snapshot is `reset`, every item, `commit`. `Bus::apply` sends a burst as one broadcast
+under the cache lock, so a client connecting mid-burst gets it whole in one place or the other.
+```json
+{"service":"compositor","event":"upsert","key":"client/0x55…","data":{…}}
+{"service":"compositor","event":"remove","key":"workspace/4"}
+{"service":"compositor","event":"commit"}
+```
+`Bus::event` is a one-off answer (`refreshed`, `cursor`): broadcast, never cached.
 
 The QML side reads it with `SplitParser { splitMarker: "\n" }` on a `Socket` and writes
 commands with `Socket.write`. New clients use `modules/services/FlokdSocket.qml`.

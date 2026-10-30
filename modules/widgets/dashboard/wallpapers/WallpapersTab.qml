@@ -22,7 +22,7 @@ FocusScope {
         selectedIndex = newIndex;
     }
 
-    readonly property string currentScreenName: AxctlService.focusedMonitor ? AxctlService.focusedMonitor.name : ""
+    readonly property string currentScreenName: CompositorService.focusedMonitor ? CompositorService.focusedMonitor.name : ""
 
     property bool isPerScreen: {
         if (!GlobalStates.wallpaperManager || currentScreenName === "") return false;

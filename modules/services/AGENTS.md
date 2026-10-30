@@ -11,13 +11,13 @@ Backend singletons bridging Wayland protocols, CLI tools (nmcli, upower, wpctl, 
 | **Battery/Power** | `Battery.qml` | UPower integration. Percentage, charging state, time remaining |
 | **Bluetooth** | `BluetoothService.qml` | Device listing, connect/disconnect |
 | **Brightness** | `Brightness.qml` | Per-monitor brightness via flokd: backlight and DDC/CI |
-| **Compositor** | `AxctlService.qml` | Spawns the `axctl` daemon and subscribes to its event stream |
 | **Clipboard** | `ClipboardService.qml` | Persistent clipboard via `clipboard.db` + helper scripts |
 | **Media** | `MprisController.qml` | MPRIS D-Bus player control |
 | **Cover art** | `CoverArtService.qml` | Resolves artwork via flokd; falls back to the app icon |
 | **Notifications** | `Notifications.qml` | D-Bus notification server with persistence |
 | **System Monitor** | `SystemResources.qml` | CPU, RAM, GPU, disk, temps via flokd |
-| **Compositor** | `AxctlService.qml` | Abstraction layer for compositor IPC (focus, dispatch) |
+| **Compositor** | `CompositorService.qml` | Hyprland windows, workspaces, monitors and dispatch from flokd; applies keyed bursts on commit |
+| **Compositor config** | `CompositorConfig.qml` | Sends settings and binds to flokd, which writes `flokshell.{lua,conf}`; holds the live layout |
 | **Visibility** | `Visibilities.qml` | Per-screen UI visibility/layering orchestration |
 | **State** | `StateService.qml` | JSON persistence for session state (tab positions, etc.) |
 | **Focus** | `FocusGrabManager.qml` | Input focus coordination across overlays |

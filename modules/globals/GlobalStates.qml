@@ -457,7 +457,7 @@ Singleton {
     property bool compositorHasChanges: false
     property var compositorSnapshot: null
 
-    // Compositor config properties (AxctlService)
+    // Compositor config properties (CompositorService)
     readonly property var _compositorProps: [
         "syncBorderWidth", "borderSize",
         "syncRoundness", "rounding",

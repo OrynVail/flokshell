@@ -24,7 +24,7 @@ Item {
     readonly property int capsuleWidth: 24
     readonly property int gap: 6
 
-    readonly property var monitor: AxctlService.monitorFor(screen)
+    readonly property var monitor: CompositorService.monitorFor(screen)
     readonly property int activeId: monitor?.activeWorkspace?.id ?? 1
     readonly property int group: Math.floor((activeId - 1) / slotCount)
 
@@ -61,9 +61,9 @@ Item {
         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
         onWheel: event => {
             if (event.angleDelta.y < 0)
-                AxctlService.dispatch(`workspace r+1`);
+                CompositorService.dispatch(`workspace r+1`);
             else if (event.angleDelta.y > 0)
-                AxctlService.dispatch(`workspace r-1`);
+                CompositorService.dispatch(`workspace r-1`);
         }
     }
 
@@ -141,7 +141,7 @@ Item {
                     anchors.verticalCenter: body.verticalCenter
                     enabled: slot.shown
                     cursorShape: Qt.PointingHandCursor
-                    onPressed: AxctlService.dispatch(`workspace ${slot.wsId}`)
+                    onPressed: CompositorService.dispatch(`workspace ${slot.wsId}`)
                 }
             }
         }

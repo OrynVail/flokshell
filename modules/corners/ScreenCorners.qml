@@ -12,7 +12,7 @@ PanelWindow {
     property bool activeWindowFullscreen: false
 
     function updateFullscreen() {
-        const mon = AxctlService.monitorFor(screen);
+        const mon = CompositorService.monitorFor(screen);
         if (mon) {
             monitor = mon;
         }
@@ -27,7 +27,7 @@ PanelWindow {
 
         // Check active toplevel first (fast path)
         const toplevel = ToplevelManager.activeToplevel;
-        if (toplevel && toplevel.fullscreen && AxctlService.focusedMonitor && AxctlService.focusedMonitor.id === monId) {
+        if (toplevel && toplevel.fullscreen && CompositorService.focusedMonitor && CompositorService.focusedMonitor.id === monId) {
             activeWindowFullscreen = true;
             return;
         }
@@ -44,7 +44,7 @@ PanelWindow {
     }
 
     Connections {
-        target: AxctlService.monitors
+        target: CompositorService.monitors
         function onValuesChanged() { screenCorners.updateFullscreen(); }
     }
 
@@ -54,7 +54,7 @@ PanelWindow {
     }
 
     Connections {
-        target: AxctlService
+        target: CompositorService
         function onFocusedMonitorChanged() { screenCorners.updateFullscreen(); }
     }
 

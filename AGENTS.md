@@ -17,16 +17,13 @@ scaffolding, no explanatory prose in the source.
 Quickshell hot-reloads on file save, so edits apply without a restart. Reloading resets
 `Visibilities.currentActiveModule`, which closes whatever panel was open.
 
-For a full restart, the socket must be cleared or the shell comes up crippled:
+`flok reload` (bound to Super+Alt+B) restarts the **installed** shell, not this checkout —
+check `pgrep -af quickshell` before trusting a test. For a full restart of the checkout:
 ```bash
-pkill -f 'quickshell -p .*flokshell'; pkill -x axctl
-rm -f /tmp/axctl-1000.sock
-./cli.sh
+pkill -f 'quickshell -p .*flokshell'; ./cli.sh
 ```
-`AxctlService` spawns the `axctl` daemon but never restarts it after a failed start, while
-`axctlSubscribe` retries forever — so a stale socket means a permanent error loop, no
-compositor state, and a shell that otherwise looks fine. Verify with `pgrep -af axctl`:
-you want both a `daemon` and a `subscribe`.
+Compositor state comes from `flokd`, not the shell: if workspaces or windows are empty,
+look at `journalctl --user -u flokd`.
 
 Driving it without touching the UI:
 ```bash
@@ -70,7 +67,7 @@ widgets live on inside the notch and everything imports `qs.modules.bar.*`.
 The service layer is being moved into `flokd`, a Rust daemon that owns fetching, parsing
 and system integration so QML is left with the rendering. A ported service keeps its
 singleton in `modules/services/` with the same property names and becomes a socket client,
-so nothing downstream changes. Ported so far: `WeatherService`, `NetworkService`, `BluetoothService`, `SystemResources`, `Brightness`, `CoverArtService`, `NightLightService`, `IdleService`, `CaffeineService`, `Screenshot` (capture, OCR, QR, Lens, colour picker), and the thumbnail and link-preview fetchers. New clients use `FlokdSocket`.
+so nothing downstream changes. Ported so far: `CompositorService` (Hyprland state, dispatch, game mode, layout, and the generated `flokshell.{lua,conf}`), `WeatherService`, `NetworkService`, `BluetoothService`, `SystemResources`, `Brightness`, `CoverArtService`, `NightLightService`, `IdleService`, `CaffeineService`, `Screenshot` (capture, OCR, QR, Lens, colour picker), and the thumbnail and link-preview fetchers. New clients use `FlokdSocket`.
 
 ## WHERE TO LOOK
 | Task | Location |
@@ -84,7 +81,7 @@ so nothing downstream changes. Ported so far: `WeatherService`, `NetworkService`
 | Notch | `modules/notch/Notch.qml`, idle content in `modules/widgets/defaultview/` |
 | Dashboard | `modules/widgets/dashboard/` |
 | Dashboard sizing | `modules/widgets/dashboard/DashboardView.qml` — every dimension derives here |
-| Compositor | `modules/services/AxctlService.qml` |
+| Compositor | `modules/services/CompositorService.qml`, `flokd/src/services/compositor.rs` |
 | IPC commands | `modules/services/GlobalShortcuts.qml` — `run()` |
 | Adding config | `config/defaults/*.js` **and** `Config.qml` — both, always |
 
@@ -98,7 +95,7 @@ so nothing downstream changes. Ported so far: `WeatherService`, `NetworkService`
 | `Styling` | `modules/theme/Styling.qml` | `radius()`, layout tokens, variants |
 | `Icons` | `modules/theme/Icons.qml` | Phosphor-Bold character map |
 | `StyledRect` | `modules/components/StyledRect.qml` | Base themed container |
-| `AxctlService` | `modules/services/AxctlService.qml` | Compositor abstraction |
+| `CompositorService` | `modules/services/CompositorService.qml` | Hyprland state and dispatch, via flokd |
 | `UnifiedShellPanel` | `modules/shell/UnifiedShellPanel.qml` | Full-screen `PanelWindow` |
 
 ## CONVENTIONS
@@ -126,6 +123,7 @@ so nothing downstream changes. Ported so far: `WeatherService`, `NetworkService`
 ## NOTES
 - Large files worth care: `ClipboardTab` (3615), `NotesTab` (3505), `TmuxTab` (2250),
   `BindsPanel` (2067), `ShellPanel` (1695), `ThemePanel` (1564), `Wallpaper` (1452).
-- `axctl` is an external Go binary from upstream, not built here.
+- Binds and compositor settings reach Hyprland only through `~/.config/hypr/flokshell.{lua,conf}`,
+  which the user's config has to include. Nothing edits the user's own config.
 - Components that take a `bar` property want an object with `orientation` and
   `barPosition`. The notch and dashboard pass small `QtObject` stubs.

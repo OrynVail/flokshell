@@ -356,17 +356,6 @@ install_quickshell() {
   log_success "Quickshell installed to ~/.local/bin/qs"
 }
 
-install_axctl() {
-  if [[ "$DISTRO" == "nixos" ]]; then
-    log_info "Skipping axctl install on NixOS (managed by flake)"
-    return
-  fi
-
-  log_info "Installing axctl..."
-  curl -L get.axeni.de/axctl | sh
-  log_success "axctl installed"
-}
-
 # === Service Configuration ===
 configure_services() {
   [[ "$DISTRO" == "nixos" ]] && return
@@ -437,7 +426,6 @@ setup_launcher() {
 # === Main ===
 migrate_old_paths
 install_dependencies "$1"
-install_axctl
 setup_repo
 install_quickshell
 configure_services

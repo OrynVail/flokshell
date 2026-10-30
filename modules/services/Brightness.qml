@@ -44,14 +44,14 @@ Singleton {
     }
 
     function increaseBrightness(): void {
-        const focusedName = AxctlService.focusedMonitor.name;
+        const focusedName = CompositorService.focusedMonitor.name;
         const monitor = monitors.find(m => focusedName === m.screen.name);
         if (monitor)
             monitor.setBrightness(monitor.brightness + 0.05);
     }
 
     function decreaseBrightness(): void {
-        const focusedName = AxctlService.focusedMonitor.name;
+        const focusedName = CompositorService.focusedMonitor.name;
         const monitor = monitors.find(m => focusedName === m.screen.name);
         if (monitor)
             monitor.setBrightness(monitor.brightness - 0.05);

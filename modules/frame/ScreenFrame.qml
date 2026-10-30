@@ -14,7 +14,7 @@ Item {
     readonly property alias frameEnabled: frameContent.frameEnabled
     readonly property alias baseThickness: frameContent.thickness
     readonly property bool hasFullscreenWindow: {
-        const monitor = AxctlService.monitorFor(targetScreen);
+        const monitor = CompositorService.monitorFor(targetScreen);
         if (!monitor)
             return false;
 
@@ -23,7 +23,7 @@ Item {
 
         // Check active toplevel first (fast path)
         const toplevel = ToplevelManager.activeToplevel;
-        if (toplevel && toplevel.fullscreen && AxctlService.focusedMonitor.id === monId) {
+        if (toplevel && toplevel.fullscreen && CompositorService.focusedMonitor.id === monId) {
             return true;
         }
 

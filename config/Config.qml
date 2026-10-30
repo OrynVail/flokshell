@@ -2412,7 +2412,7 @@ Singleton {
                     "actions": [
                         {
                             "dispatcher": "exec",
-                            "argument": "axctl monitor set-dpms 0 0",
+                            "argument": "flok screen off",
                             "flags": "l",
                             "layouts": []
                         }
@@ -2430,7 +2430,7 @@ Singleton {
                     "actions": [
                         {
                             "dispatcher": "exec",
-                            "argument": "axctl monitor set-dpms 0 1",
+                            "argument": "flok screen on",
                             "flags": "l",
                             "layouts": []
                         }

@@ -71,8 +71,8 @@ Item {
     readonly property int edgeSideMargin: isDefault ? 0 : dockMargin
 
     // Monitor reference and refrence to toplevels on monitor
-    readonly property var compositorMonitor: AxctlService.monitorFor(screen)
-    readonly property var toplevels: (!compositorMonitor || !compositorMonitor.activeWorkspace || !AxctlService.clients.values) ? [] : AxctlService.clients.values.filter(c => c.workspace.id === compositorMonitor.activeWorkspace.id)
+    readonly property var compositorMonitor: CompositorService.monitorFor(screen)
+    readonly property var toplevels: (!compositorMonitor || !compositorMonitor.activeWorkspace || !CompositorService.clients.values) ? [] : CompositorService.clients.values.filter(c => c.workspace.id === compositorMonitor.activeWorkspace.id)
 
     // Check if there are any windows on the current monitor and workspace
     readonly property bool hasWindows: toplevels.length > 0

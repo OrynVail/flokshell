@@ -114,8 +114,8 @@ var ACTION_CATALOG = [
     { id: "system.calculator", label: "Calculator", category: "System", dispatcher: "exec", argument: "notify-send \"Soon\"" },
     { id: "system.lock", label: "Lock Session", category: "System", dispatcher: "exec", argument: "loginctl lock-session" },
     { id: "system.lock-locked", label: "Lock Session (Locked)", category: "System", dispatcher: "exec", argument: "loginctl lock-session", flags: "l" },
-    { id: "system.dpms-off", label: "Display Off", category: "System", dispatcher: "exec", argument: "axctl monitor set-dpms 0 0", flags: "l" },
-    { id: "system.dpms-on", label: "Display On", category: "System", dispatcher: "exec", argument: "axctl monitor set-dpms 0 1", flags: "l" },
+    { id: "system.dpms-off", label: "Display Off", category: "System", dispatcher: "exec", argument: "flok screen off", flags: "l" },
+    { id: "system.dpms-on", label: "Display On", category: "System", dispatcher: "exec", argument: "flok screen on", flags: "l" },
 
     { id: "command.run", label: "Run Command", category: "Custom", dispatcher: "exec", args: [{ key: "command", label: "Command", placeholder: "command to run", defaultValue: "" }], argumentBuilder: function (args) {
         return String(args.command || "").trim();
@@ -282,8 +282,8 @@ function actionFromLegacy(dispatcher, argument, flags) {
         if (arg === "notify-send \"Soon\"") return { id: "system.calculator", args: {} };
         if (arg === "loginctl lock-session" && flags === "l") return { id: "system.lock-locked", args: {} };
         if (arg === "loginctl lock-session") return { id: "system.lock", args: {} };
-        if (arg === "axctl monitor set-dpms 0 0") return { id: "system.dpms-off", args: {} };
-        if (arg === "axctl monitor set-dpms 0 1") return { id: "system.dpms-on", args: {} };
+        if (arg === "flok screen off" || arg === "axctl monitor set-dpms 0 0") return { id: "system.dpms-off", args: {} };
+        if (arg === "flok screen on" || arg === "axctl monitor set-dpms 0 1") return { id: "system.dpms-on", args: {} };
         return { id: "command.run", args: { command: arg } };
     }
 

@@ -85,8 +85,8 @@ QtObject {
     function toggleSettings() {
         const willOpen = !GlobalStates.settingsWindowVisible;
         if (willOpen) {
-            GlobalStates.settingsTargetWorkspaceId = AxctlService.focusedMonitor?.activeWorkspace?.id || AxctlService.focusedWorkspace?.id || 0;
-            GlobalStates.settingsTargetScreenName = AxctlService.focusedMonitor?.name || "";
+            GlobalStates.settingsTargetWorkspaceId = CompositorService.focusedMonitor?.activeWorkspace?.id || CompositorService.focusedWorkspace?.id || 0;
+            GlobalStates.settingsTargetScreenName = CompositorService.focusedMonitor?.name || "";
             Visibilities.setActiveModule("");
         }
         GlobalStates.settingsWindowVisible = willOpen;

@@ -69,7 +69,7 @@ PanelWindow {
 
     readonly property bool unifiedEffectActive: false // Flag to notify children to disable internal borders
 
-    readonly property var compositorMonitor: AxctlService.monitorFor(targetScreen)
+    readonly property var compositorMonitor: CompositorService.monitorFor(targetScreen)
     readonly property bool hasFullscreenWindow: {
         if (!compositorMonitor)
             return false;
@@ -79,7 +79,7 @@ PanelWindow {
 
         // Check active toplevel first (fast path)
         const toplevel = ToplevelManager.activeToplevel;
-        if (toplevel && toplevel.fullscreen && AxctlService.focusedMonitor.id === monId) {
+        if (toplevel && toplevel.fullscreen && CompositorService.focusedMonitor.id === monId) {
             return true;
         }
 

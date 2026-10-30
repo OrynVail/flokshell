@@ -3,7 +3,6 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import Quickshell.Io
 import qs.modules.theme
 import qs.modules.components
 import qs.config
@@ -18,38 +17,6 @@ Item {
 
     // Current category being viewed
     property string currentCategory: "flokshell"
-
-    // Process for unbinding keybinds
-    Process {
-        id: unbindProcess
-    }
-
-    // Function to unbind a specific keybind (supports both old and new format)
-    function unbindKeybind(bind) {
-        if (!bind)
-            return;
-
-        // Check if new format with keys[]
-        if (bind.keys && bind.keys.length > 0) {
-            for (let k = 0; k < bind.keys.length; k++) {
-                const keyObj = bind.keys[k];
-                const mods = keyObj.modifiers && keyObj.modifiers.length > 0 ? keyObj.modifiers.join(" ") : "";
-                const key = keyObj.key || "";
-                const command = `axctl config unbind-key ${mods},${key}`;
-                console.log("BindsPanel: Unbinding keybind:", command);
-                unbindProcess.command = ["sh", "-c", command];
-                unbindProcess.running = true;
-            }
-        } else {
-            // Old format fallback
-            const mods = bind.modifiers && bind.modifiers.length > 0 ? bind.modifiers.join(" ") : "";
-            const key = bind.key || "";
-            const command = `axctl config unbind-key ${mods},${key}`;
-            console.log("BindsPanel: Unbinding keybind:", command);
-            unbindProcess.command = ["sh", "-c", command];
-            unbindProcess.running = true;
-        }
-    }
 
     // Edit mode state
     property bool editMode: false
@@ -515,10 +482,6 @@ Item {
         const customBinds = Config.keybindsLoader.adapter.custom;
         if (!customBinds || index < 0 || index >= customBinds.length)
             return;
-
-        // Get the bind to delete and unbind it first
-        const bindToDelete = customBinds[index];
-        unbindKeybind(bindToDelete);
 
         let newBinds = [];
         for (let i = 0; i < customBinds.length; i++) {
@@ -1687,10 +1650,10 @@ Item {
                             }
 
                             // =====================
-                            // LAYOUT SELECTOR (for AxctlService)
+                            // LAYOUT SELECTOR (for CompositorService)
                             // =====================
                             Text {
-                                text: "Layouts (AxctlService)"
+                                text: "Layouts (CompositorService)"
                                 font.family: Config.theme.font
                                 font.pixelSize: Styling.fontSize(-1)
                                 font.weight: Font.Medium
