@@ -11,7 +11,7 @@ Backend singletons bridging Wayland protocols, CLI tools (nmcli, upower, wpctl, 
 | **Battery/Power** | `Battery.qml` | UPower integration. Percentage, charging state, time remaining |
 | **Bluetooth** | `BluetoothService.qml` | Device listing, connect/disconnect |
 | **Brightness** | `Brightness.qml` | Per-monitor brightness via flokd: backlight and DDC/CI |
-| **Clipboard** | `ClipboardService.qml` | Persistent clipboard via `clipboard.db` + helper scripts |
+| **Clipboard** | `ClipboardService.qml` | History, search and copying through flokd; `clipboard.db` is flokd's alone |
 | **Media** | `MprisController.qml` | MPRIS D-Bus player control |
 | **Cover art** | `CoverArtService.qml` | Resolves artwork via flokd; falls back to the app icon |
 | **Notifications** | `Notifications.qml` | D-Bus notification server with persistence |

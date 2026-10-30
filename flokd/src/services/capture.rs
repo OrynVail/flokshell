@@ -14,6 +14,7 @@ use tokio::sync::{mpsc, oneshot};
 use zbus::Connection;
 
 use crate::bus::{Bus, Request};
+use crate::datacontrol;
 use crate::notify::{self, Notice};
 use crate::wayland::{self, Frame};
 
@@ -89,6 +90,7 @@ impl TryFrom<Request> for Command {
 pub struct Service {
     bus: Bus,
     wayland: wayland::Handle,
+    clip: datacontrol::Handle,
     http: reqwest::Client,
     state: State,
     frames: Vec<Frame>,
@@ -97,10 +99,11 @@ pub struct Service {
 }
 
 impl Service {
-    pub fn new(bus: Bus, wayland: wayland::Handle) -> Result<Self> {
+    pub fn new(bus: Bus, wayland: wayland::Handle, clip: datacontrol::Handle) -> Result<Self> {
         Ok(Self {
             bus,
             wayland,
+            clip,
             http: crate::http::client("flokshell", Duration::from_secs(30))?,
             state: State {
                 dir: pictures()
@@ -150,7 +153,7 @@ impl Service {
                             "hsv" => &values[2],
                             _ => &values[0],
                         };
-                        let _ = copy(text.as_bytes(), None).await;
+                        self.clip.text(text);
                     }
                 }
             }
@@ -243,7 +246,7 @@ impl Service {
                 std::fs::create_dir_all(&dir)?;
                 let path = unique(&dir, &format!("Screenshot_{}", timestamp()));
                 std::fs::write(&path, &png)?;
-                copy(&png, Some("image/png")).await?;
+                self.clip.bytes("image/png", &png);
                 Ok(path)
             }
             "ocr" => {
@@ -305,7 +308,7 @@ impl Service {
     ) -> Result<PathBuf> {
         let empty = text.is_empty();
         if !empty {
-            copy(text.as_bytes(), None).await?;
+            self.clip.text(text);
         }
         if let Some(c) = session {
             notify::send(
@@ -325,7 +328,7 @@ impl Service {
 
     async fn color(&mut self, session: Option<&Connection>, [r, g, b]: [u8; 3]) -> Result<PathBuf> {
         let values = color_strings(r, g, b);
-        copy(values[0].as_bytes(), None).await?;
+        self.clip.text(&values[0]);
         let swatch = RgbaImage::from_pixel(64, 64, image::Rgba([r, g, b, 255]));
         tokio::task::spawn_blocking(move || write_png(&swatch, Path::new(SWATCH), true)).await??;
         if let Some(c) = session {
@@ -441,23 +444,6 @@ fn write_png(img: &RgbaImage, path: &Path, fast: bool) -> Result<()> {
     let tmp = path.with_extension("part");
     std::fs::write(&tmp, encode_png(img, fast)?)?;
     std::fs::rename(tmp, path)?;
-    Ok(())
-}
-
-// wl-copy until the clipboard moves into flokd with the rest of Tier 5.
-async fn copy(data: &[u8], mime: Option<&str>) -> Result<()> {
-    let mut cmd = tokio::process::Command::new("wl-copy");
-    if let Some(m) = mime {
-        cmd.args(["--type", m]);
-    }
-    let mut child = cmd.stdin(Stdio::piped()).spawn()?;
-    child
-        .stdin
-        .take()
-        .context("no stdin")?
-        .write_all(data)
-        .await?;
-    child.wait().await?;
     Ok(())
 }
 

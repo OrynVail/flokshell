@@ -18,6 +18,13 @@ pub fn cache_dir() -> PathBuf {
     base.join("flokshell")
 }
 
+pub fn data_dir() -> PathBuf {
+    let base = std::env::var("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| home().join(".local/share"));
+    base.join("flokshell")
+}
+
 fn home() -> PathBuf {
     std::env::var("HOME").map(PathBuf::from).unwrap_or_default()
 }

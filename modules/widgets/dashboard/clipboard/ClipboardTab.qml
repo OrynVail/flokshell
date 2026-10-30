@@ -2,7 +2,6 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
-import Quickshell.Io
 import Quickshell.Widgets
 import qs.modules.theme
 import qs.modules.components
@@ -70,13 +69,6 @@ Item {
     onExpandedItemIndexChanged:
     // Close expanded options when selection changes to a different item is handled in onSelectedIndexChanged
     {}
-
-    // Refresh clipboard list when tab becomes visible
-    onVisibleChanged: {
-        if (visible) {
-            ClipboardService.list();
-        }
-    }
 
     function adjustScrollForExpandedItem(index) {
         if (index < 0 || index >= itemsModel.count)
@@ -275,7 +267,9 @@ Item {
     }
 
     onSearchTextChanged: {
-        updateFilteredItems();
+        ClipboardService.search(searchText);
+        if (searchText.length === 0)
+            updateFilteredItems();
     }
 
     function clearSearch() {
@@ -330,7 +324,6 @@ Item {
         selectedIndex = -1;
         hasNavigatedFromSearch = false;
 
-        refreshClipboardHistory();
         searchInput.focusInput();
     }
 
@@ -410,18 +403,7 @@ Item {
             currentIdToKeep = allItems[selectedIndex].id;
         }
 
-        var newItems = [];
-
-        for (var i = 0; i < ClipboardService.items.length; i++) {
-            var item = ClipboardService.items[i];
-            var content = item.preview || "";
-            var alias = item.alias || "";
-
-            // Search in both content and alias
-            if (searchText.length === 0 || content.toLowerCase().includes(searchText.toLowerCase()) || alias.toLowerCase().includes(searchText.toLowerCase())) {
-                newItems.push(item);
-            }
-        }
+        var newItems = (searchText.length > 0 ? ClipboardService.results : ClipboardService.items).slice();
 
         allItems = newItems;
         // Don't reset scroll or animation state here to prevent jumps during rapid updates
@@ -575,34 +557,8 @@ Item {
         }
     }
 
-    function refreshClipboardHistory() {
-        ClipboardService.list();
-    }
-
     function copyToClipboard(itemId) {
-        // Find the item to determine its type
-        for (var i = 0; i < root.allItems.length; i++) {
-            if (root.allItems[i].id === itemId) {
-                var item = root.allItems[i];
-                if (item.isImage && item.binaryPath) {
-                    // Copy image with correct MIME type
-                    copyProcess.command = ["sh", "-c", "cat '" + item.binaryPath + "' | wl-copy --type '" + item.mime + "'"];
-                } else if (item.isFile) {
-                    // Copy file URI with text/uri-list MIME type, removing carriage returns
-                    copyProcess.command = ["sh", "-c", "sqlite3 '" + ClipboardService.dbPath + "' \"SELECT full_content FROM clipboard_items WHERE id = " + itemId + ";\" | tr -d '\\r' | wl-copy --type text/uri-list"];
-                } else {
-                    // Optimized path for text: use the already loaded safeCurrentContent if it matches
-                    if (root.contentMatchesSelection && root.currentItemId === itemId && root.currentFullContent) {
-                        copyProcess.command = ["sh", "-c", "printf '%s' " + ClipboardUtils.escapeShellArg(root.currentFullContent) + " | wl-copy"];
-                    } else {
-                        // Fallback: Copy text as plain text from DB
-                        copyProcess.command = ["sh", "-c", "sqlite3 '" + ClipboardService.dbPath + "' \"SELECT full_content FROM clipboard_items WHERE id = " + itemId + ";\" | wl-copy"];
-                    }
-                }
-                copyProcess.running = true;
-                break;
-            }
-        }
+        ClipboardService.copy(itemId);
     }
 
     // Signal to request opening an item
@@ -629,6 +585,12 @@ Item {
     Connections {
         target: ClipboardService
         function onListCompleted() {
+            if (root.searchText.length > 0)
+                ClipboardService.search(root.searchText);
+            else
+                updateFilteredItems();
+        }
+        function onResultsReady() {
             updateFilteredItems();
         }
     }
@@ -680,18 +642,6 @@ Item {
             // Only clear loading state if this response is for the currently selected item
             if (root.currentSelectedItem && root.currentSelectedItem.id === requestItemId) {
                 root.loadingLinkPreview = false;
-            }
-        }
-    }
-
-    // Proceso para copiar al portapapeles
-    Process {
-        id: copyProcess
-        running: false
-
-        onExited: function (code) {
-            if (code === 0) {
-                ClipboardService.checkClipboard();
             }
         }
     }
@@ -3611,7 +3561,7 @@ Item {
     }
 
     Component.onCompleted: {
-        refreshClipboardHistory();
+        updateFilteredItems();
         Qt.callLater(() => {
             focusSearchInput();
         });

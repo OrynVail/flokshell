@@ -1,5 +1,6 @@
 mod bus;
 mod config;
+mod datacontrol;
 mod dbus;
 mod ddc;
 mod http;
@@ -116,10 +117,13 @@ async fn main() -> Result<()> {
         services::idle::Service::new(bus.clone(), wl.clone(), notes.subscribe()).run(idle_rx),
     );
 
+    let (selection_tx, selection_rx) = mpsc::channel(8);
+    let clip = datacontrol::spawn(selection_tx);
+
     let (capture_tx, capture_rx) = mpsc::channel(4);
     commands.insert("capture", capture_tx);
     tokio::spawn(
-        services::capture::Service::new(bus.clone(), wl)
+        services::capture::Service::new(bus.clone(), wl, clip.clone())
             .context("capture service")?
             .run(capture_rx),
     );
@@ -128,6 +132,13 @@ async fn main() -> Result<()> {
     let (compositor_tx, compositor_rx) = mpsc::channel(32);
     commands.insert("compositor", compositor_tx);
     tokio::spawn(services::compositor::Service::new(bus.clone()).run(compositor_rx));
+
+    // Search sends one per keystroke, and an edit among them must not be dropped.
+    let (clipboard_tx, clipboard_rx) = mpsc::channel(64);
+    commands.insert("clipboard", clipboard_tx);
+    tokio::spawn(
+        services::clipboard::Service::new(bus.clone(), clip).run(clipboard_rx, selection_rx),
+    );
 
     let path = socket_path();
     // Single instance is the unit's job; a leftover socket is never a live peer.

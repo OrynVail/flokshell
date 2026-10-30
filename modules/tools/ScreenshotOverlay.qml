@@ -35,14 +35,6 @@ PanelWindow {
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
-    property Process copyOverlayProcess: Process {
-        id: copyOverlayProcess
-        command: ["bash", "-c", "cat \"" + root.imagePath + "\" | wl-copy --type image/png"]
-        onExited: exitCode => {
-            if (exitCode !== 0) console.warn("Overlay Copy Failed (Exit code: " + exitCode + ")")
-        }
-    }
-
     // Timer to auto-hide after 5 seconds
     Timer {
         id: hideTimer
@@ -190,7 +182,7 @@ PanelWindow {
             ActionButton {
                 icon: Icons.copy
                 onTriggered: {
-                    copyOverlayProcess.running = true
+                    ClipboardService.copyFile(root.imagePath, "image/png")
                 }
 
                 StyledToolTip {

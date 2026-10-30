@@ -18,6 +18,7 @@ src/
 ├── hyprconf.rs          # renders the shell's compositor payload as flokshell.lua and .conf
 ├── hyprland.rs          # live instance discovery, request socket, event socket
 ├── notify.rs            # desktop notifications and their action clicks, session bus
+├── datacontrol.rs       # the system clipboard: reads what is copied, serves what we copy; reconnects
 ├── wayland.rs           # one compositor connection: outputs, gamma, idle, screencopy; reconnects
 └── services/
     ├── bluetooth.rs     # BlueZ: adapter, devices, discovery, connects

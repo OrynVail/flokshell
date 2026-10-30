@@ -67,7 +67,7 @@ widgets live on inside the notch and everything imports `qs.modules.bar.*`.
 The service layer is being moved into `flokd`, a Rust daemon that owns fetching, parsing
 and system integration so QML is left with the rendering. A ported service keeps its
 singleton in `modules/services/` with the same property names and becomes a socket client,
-so nothing downstream changes. Ported so far: `CompositorService` (Hyprland state, dispatch, game mode, layout, and the generated `flokshell.{lua,conf}`), `WeatherService`, `NetworkService`, `BluetoothService`, `SystemResources`, `Brightness`, `CoverArtService`, `NightLightService`, `IdleService`, `CaffeineService`, `Screenshot` (capture, OCR, QR, Lens, colour picker), and the thumbnail and link-preview fetchers. New clients use `FlokdSocket`.
+so nothing downstream changes. Ported so far: `CompositorService` (Hyprland state, dispatch, game mode, layout, and the generated `flokshell.{lua,conf}`), `WeatherService`, `NetworkService`, `BluetoothService`, `SystemResources`, `Brightness`, `CoverArtService`, `NightLightService`, `IdleService`, `CaffeineService`, `Screenshot` (capture, OCR, QR, Lens, colour picker), `ClipboardService`, and the thumbnail and link-preview fetchers. New clients use `FlokdSocket`.
 
 ## WHERE TO LOOK
 | Task | Location |

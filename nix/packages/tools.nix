@@ -8,10 +8,8 @@ with pkgs; [
 
   libnotify
   matugen
-  sqlite
   upower
   wl-clip-persist
-  wl-clipboard
   wtype
   zbar
   zenity
