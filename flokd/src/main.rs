@@ -43,6 +43,10 @@ fn socket_path() -> PathBuf {
 // shows up later belongs on spawn_blocking regardless of this choice.
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
+    // Each blocking thread would get its own glibc arena and keep what a decode
+    // freed: 205 MB idle against 44 MB with one. Nothing here contends on malloc.
+    unsafe { libc::mallopt(libc::M_ARENA_MAX, 1) };
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_env("FLOKD_LOG")
