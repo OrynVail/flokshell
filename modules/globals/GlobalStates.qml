@@ -186,6 +186,7 @@ Singleton {
     property bool settingsWindowVisible: false
     property int settingsTargetWorkspaceId: 0
     property string settingsTargetScreenName: ""
+    property var settingsIndexItems: null
 
     // Theme editor state - persists across tab switches
     property bool themeHasChanges: false

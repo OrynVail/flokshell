@@ -21,6 +21,7 @@ Rectangle {
     property int currentSection: 0
     property int selectedIndex: GlobalStates.settingsCurrentTab
     property string searchQuery: ""
+    onSearchQueryChanged: if (searchQuery.length > 0) settingsIndexer.start()
 
     onFilteredSectionsChanged: selectedIndex = 0
 
@@ -99,22 +100,22 @@ Rectangle {
                 // Done
                 if (isIndexing) {
                     isIndexing = false;
+                    GlobalStates.settingsIndexItems = aggregatedItems;
                     searchIndex.addDynamicItems(aggregatedItems);
                 }
             }
         }
 
-        Component.onCompleted: {
-            // Start indexing after a short delay to allow UI to settle
-            indexingTimer.start();
+        // Instantiates every panel to scrape it, so it waits for a search and
+        // runs once per shell, not once per window.
+        function start() {
+            if (GlobalStates.settingsIndexItems === null)
+                isIndexing = true;
         }
 
-        Timer {
-            id: indexingTimer
-            interval: 500
-            onTriggered: {
-                settingsIndexer.isIndexing = true;
-            }
+        Component.onCompleted: {
+            if (GlobalStates.settingsIndexItems !== null)
+                searchIndex.addDynamicItems(GlobalStates.settingsIndexItems);
         }
     }
 
