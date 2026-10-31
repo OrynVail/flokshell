@@ -237,14 +237,6 @@ ShellRoot {
         }
     }
 
-    // Init clipboard service
-    Connections {
-        target: ClipboardService
-        function onListCompleted() {
-        // Service initialized and ready
-        }
-    }
-
     // Force service init at startup but defer it slightly so it doesn't block the UI
     QtObject {
         id: serviceInitializer

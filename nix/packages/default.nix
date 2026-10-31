@@ -66,14 +66,8 @@ let
     exec ${shellSrc}/cli.sh "$@"
   '';
 
-  # Compat shim: the old command name, kept so existing keybinds keep working.
-  compat = pkgs.runCommand "flokshell-compat" { } ''
-    mkdir -p $out/bin
-    ln -s ${launcher}/bin/flok $out/bin/ambxst
-  '';
-
 in pkgs.buildEnv {
   name = "Flokshell-${version}";
-  paths = [ envFlokshell launcher compat ];
+  paths = [ envFlokshell launcher ];
   meta.mainProgram = "flok";
 }

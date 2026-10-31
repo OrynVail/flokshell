@@ -139,6 +139,9 @@ require("flokshell")
 source = ~/.config/hypr/flokshell.conf
 ```
 
+`flok install hyprland` adds the line for you and `flok remove hyprland` takes it out. A config
+managed by Home Manager is read-only, so add it there instead.
+
 To keep your own, include neither. The bind editor still saves, it just has nowhere to land.
 Mixing the two on the same keys is not something I handle — pick one per key.
 

@@ -7,7 +7,6 @@ with pkgs; [
   tmux
 
   # Launcher
-  fuzzel
 
   # Control panels
   networkmanagerapplet

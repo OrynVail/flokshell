@@ -282,8 +282,8 @@ function actionFromLegacy(dispatcher, argument, flags) {
         if (arg === "notify-send \"Soon\"") return { id: "system.calculator", args: {} };
         if (arg === "loginctl lock-session" && flags === "l") return { id: "system.lock-locked", args: {} };
         if (arg === "loginctl lock-session") return { id: "system.lock", args: {} };
-        if (arg === "flok screen off" || arg === "axctl monitor set-dpms 0 0") return { id: "system.dpms-off", args: {} };
-        if (arg === "flok screen on" || arg === "axctl monitor set-dpms 0 1") return { id: "system.dpms-on", args: {} };
+        if (arg === "flok screen off") return { id: "system.dpms-off", args: {} };
+        if (arg === "flok screen on") return { id: "system.dpms-on", args: {} };
         return { id: "command.run", args: { command: arg } };
     }
 

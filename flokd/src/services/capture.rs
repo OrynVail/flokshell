@@ -498,14 +498,22 @@ async fn upload(http: &reqwest::Client, png: Vec<u8>) -> Result<String> {
 }
 
 fn pictures() -> PathBuf {
+    xdg_dir("XDG_PICTURES_DIR", "Pictures")
+}
+
+pub fn videos() -> PathBuf {
+    xdg_dir("XDG_VIDEOS_DIR", "Videos")
+}
+
+fn xdg_dir(key: &str, fallback: &str) -> PathBuf {
     let home = PathBuf::from(std::env::var("HOME").unwrap_or_default());
     let dirs = crate::config::dir()
         .parent()
         .and_then(|p| p.parent())
         .map(|c| c.join("user-dirs.dirs"));
     dirs.and_then(|p| std::fs::read_to_string(p).ok())
-        .and_then(|s| user_dir(&s, "XDG_PICTURES_DIR", &home))
-        .unwrap_or_else(|| home.join("Pictures"))
+        .and_then(|s| user_dir(&s, key, &home))
+        .unwrap_or_else(|| home.join(fallback))
 }
 
 // user-dirs.dirs is shell syntax, but only ever "$HOME/x" or "/abs" in practice.
@@ -531,7 +539,7 @@ fn unique(dir: &Path, stem: &str) -> PathBuf {
         .unwrap()
 }
 
-fn timestamp() -> String {
+pub fn timestamp() -> String {
     let now = unsafe { libc::time(std::ptr::null_mut()) };
     // SAFETY: localtime_r fills the zeroed tm it is given.
     let mut tm: libc::tm = unsafe { std::mem::zeroed() };

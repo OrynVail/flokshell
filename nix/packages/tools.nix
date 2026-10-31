@@ -9,10 +9,8 @@ with pkgs; [
   libnotify
   matugen
   upower
-  wl-clip-persist
   wtype
   zbar
   zenity
-  inetutils
   adw-gtk3
 ]

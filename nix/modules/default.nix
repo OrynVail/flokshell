@@ -30,6 +30,8 @@ in {
       wantedBy = [ "graphical-session.target" ];
       wants = [ "graphical-session.target" ];
       after = [ "graphical-session.target" ];
+      # flokd runs what the shell's package ships and the commands the user configures.
+      environment.PATH = lib.mkForce "/run/wrappers/bin:${cfg.package}/bin:/etc/profiles/per-user/%u/bin:/run/current-system/sw/bin";
       serviceConfig = {
         ExecStart = "${cfg.package}/bin/flokd";
         Restart = "always";

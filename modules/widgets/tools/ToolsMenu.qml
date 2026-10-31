@@ -2,7 +2,6 @@ import QtQuick
 import qs.modules.components
 import qs.modules.theme
 import qs.modules.globals
-import Quickshell.Io
 
 import qs.modules.services
 import qs.config
@@ -92,12 +91,6 @@ ActionGrid {
         }
     ], utilityGroup) : captureGroup.concat(recordGroup, utilityGroup)
 
-    Process {
-        id: openFolderProc
-        // nohup so the viewer outlives the menu
-        command: ["bash", "-c", "nohup xdg-open \"$0\" > /dev/null 2>&1 &"]
-    }
-
     onActionTriggered: action => {
         console.log("Tools action triggered:", action.tooltip);
 
@@ -106,7 +99,6 @@ ActionGrid {
             GlobalStates.screenshotToolVisible = true;
             root.itemSelected();
         } else if (action.tooltip === "Screen Recorder") {
-            ScreenRecorder.initialize();
             GlobalStates.screenRecordToolVisible = true;
             root.itemSelected();
         } else if (action.tooltip === "Stop Recording") {
@@ -116,12 +108,8 @@ ActionGrid {
             Screenshot.openScreenshotsFolder();
             root.itemSelected();
         } else if (action.tooltip === "Open Recordings") {
-            var cmd = "dir=\"$(xdg-user-dir VIDEOS)/Recordings\"; mkdir -p \"$dir\"; nohup xdg-open \"$dir\" > /dev/null 2>&1 &";
-            
-            openFolderProc.command = ["bash", "-c", cmd];
-            openFolderProc.running = true;
-            
-             root.itemSelected();
+            ScreenRecorder.openRecordingsFolder();
+            root.itemSelected();
         } else if (action.tooltip === "Color Picker") {
             Screenshot.captureMode = "color";
             GlobalStates.screenshotToolVisible = true;

@@ -140,6 +140,10 @@ async fn main() -> Result<()> {
         services::clipboard::Service::new(bus.clone(), clip).run(clipboard_rx, selection_rx),
     );
 
+    let (recorder_tx, recorder_rx) = mpsc::channel(4);
+    commands.insert("recorder", recorder_tx);
+    tokio::spawn(services::recorder::Service::new(bus.clone()).run(recorder_rx));
+
     let path = socket_path();
     // Single instance is the unit's job; a leftover socket is never a live peer.
     let _ = std::fs::remove_file(&path);

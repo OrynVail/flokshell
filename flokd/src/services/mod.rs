@@ -8,6 +8,7 @@ pub mod idle;
 pub mod linkpreview;
 pub mod network;
 pub mod nightlight;
+pub mod recorder;
 pub mod resources;
 pub mod thumbs;
 pub mod weather;

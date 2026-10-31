@@ -71,12 +71,12 @@ Examples:
 EOF
 }
 
-FLOKSHELL_HYPR_CONF_SOURCE="source = ~/.local/share/flokshell/hyprland.conf"
-FLOKSHELL_HYPR_LUA_SOURCE='loadfile(os.getenv("HOME") .. "/.local/share/flokshell/hyprland.lua")()'
+FLOKSHELL_HYPR_CONF_SOURCE="source = ~/.config/hypr/flokshell.conf"
+FLOKSHELL_HYPR_LUA_SOURCE='require("flokshell")'
 FLOKSHELL_HYPR_CONF_BLOCK=$(
 	cat <<'EOF'
 # Flokshell
-source = ~/.local/share/flokshell/hyprland.conf
+source = ~/.config/hypr/flokshell.conf
 
 # OVERRIDES
 # Down here you can write or source anything that you want to override from Flokshell's settings.
@@ -85,7 +85,7 @@ EOF
 FLOKSHELL_HYPR_LUA_BLOCK=$(
 	cat <<'EOF'
 -- Flokshell
-loadfile(os.getenv("HOME") .. "/.local/share/flokshell/hyprland.lua")()
+require("flokshell")
 
 -- OVERRIDES
 -- Down here you can write or source anything that you want to override from Flokshell's settings.

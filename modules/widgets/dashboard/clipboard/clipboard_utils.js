@@ -146,8 +146,3 @@ function getNerdFontIconForExtension(filePath) {
     // Default file icon
     return "󰈔";
 }
-
-function escapeShellArg(arg) {
-    if (arg === null || arg === undefined) return "''";
-    return "'" + arg.toString().replace(/'/g, "'\\''") + "'";
-}

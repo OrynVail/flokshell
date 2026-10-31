@@ -42,7 +42,6 @@ declare -A BINARY_CHECK=(
   ["quickshell"]="qs"
   ["kitty"]="kitty"
   ["tmux"]="tmux"
-  ["fuzzel"]="fuzzel"
   ["grim"]="grim"
   ["slurp"]="slurp"
   ["jq"]="jq"
@@ -111,7 +110,7 @@ install_dependencies() {
     yes | sudo dnf copr enable iucar/cran
 
     local PKGS=(
-      kitty tmux fuzzel network-manager-applet blueman
+      kitty tmux network-manager-applet blueman
       pipewire wireplumber easyeffects playerctl
       qt6-qtbase qt6-qtdeclarative qt6-qtwayland qt6-qtsvg qt6-qttools
       qt6-qtimageformats qt6-qtmultimedia qt6-qtshadertools
@@ -159,18 +158,18 @@ install_dependencies() {
     fi
 
     local PKGS=(
-      kitty tmux fuzzel network-manager-applet blueman
+      kitty tmux network-manager-applet blueman
       pipewire wireplumber pavucontrol easyeffects ffmpeg x264 playerctl
       qt6-base qt6-declarative qt6-wayland qt6-svg qt6-tools qt6-imageformats qt6-multimedia qt6-shadertools
       libwebp libavif syntax-highlighting breeze-icons hicolor-icon-theme
       fontconfig jq upower
-      wtype zbar glib2 zenity inetutils power-profiles-daemon
+      wtype zbar glib2 zenity power-profiles-daemon
       libnotify
       tesseract tesseract-data-eng tesseract-data-spa tesseract-data-jpn
       tesseract-data-chi_sim tesseract-data-chi_tra tesseract-data-kor tesseract-data-lat
       ttf-roboto ttf-roboto-mono ttf-dejavu ttf-liberation noto-fonts noto-fonts-cjk noto-fonts-emoji
       ttf-nerd-fonts-symbols
-      matugen gpu-screen-recorder wl-clip-persist mpvpaper gradia
+      matugen gpu-screen-recorder mpvpaper gradia
       quickshell ttf-phosphor-icons ttf-league-gothic adw-gtk-theme
     )
 
@@ -209,74 +208,6 @@ install_phosphor_fonts() {
   rm -rf "$TEMP_DIR"
   fc-cache -f "$FONT_DIR"
   log_success "Phosphor Icons installed"
-}
-
-# === Migration ===
-migrate_old_paths() {
-  log_info "Checking for old Flokshell paths..."
-
-  # Source migration (PascalCase -> lowercase)
-  local OLD_SRC="$HOME/Flokshell"
-  if [[ -d "$OLD_SRC" && ! -d "$INSTALL_PATH" ]]; then
-    log_info "Migrating source: $OLD_SRC -> $INSTALL_PATH"
-    mkdir -p "$(dirname "$INSTALL_PATH")"
-    cp -r "$OLD_SRC" "$INSTALL_PATH"
-  fi
-
-  # Config migration
-  local OLD_CONFIG="$HOME/.config/ambxst"
-  local NEW_CONFIG="$HOME/.config/flokshell"
-  if [[ -d "$OLD_CONFIG" && ! -d "$NEW_CONFIG" ]]; then
-    log_info "Migrating config: $OLD_CONFIG -> $NEW_CONFIG"
-    mv "$OLD_CONFIG" "$NEW_CONFIG"
-  fi
-
-  # Share migration
-  local OLD_SHARE="$HOME/.local/share/ambxst"
-  local NEW_SHARE="$HOME/.local/share/flokshell"
-  if [[ -d "$OLD_SHARE" && ! -d "$NEW_SHARE" ]]; then
-    log_info "Migrating share: $OLD_SHARE -> $NEW_SHARE"
-    mv "$OLD_SHARE" "$NEW_SHARE"
-  fi
-
-  # State migration
-  local OLD_STATE="$HOME/.local/state/ambxst"
-  local NEW_STATE="$HOME/.local/state/flokshell"
-  if [[ -d "$OLD_STATE" && ! -d "$NEW_STATE" ]]; then
-    log_info "Migrating state: $OLD_STATE -> $NEW_STATE"
-    mv "$OLD_STATE" "$NEW_STATE"
-  fi
-
-  # Cache migration
-  local OLD_CACHE_DIR="$HOME/.cache/ambxst"
-  local NEW_CACHE_DIR="$HOME/.cache/flokshell"
-  if [[ -d "$OLD_CACHE_DIR" && ! -d "$NEW_CACHE_DIR" ]]; then
-    log_info "Migrating cache: $OLD_CACHE_DIR -> $NEW_CACHE_DIR"
-    mv "$OLD_CACHE_DIR" "$NEW_CACHE_DIR"
-  fi
-
-  # Legacy share -> cache migration (Wallpapers & Thumbnails)
-  local NEW_CACHE="$HOME/.cache/flokshell"
-  if [[ -d "$NEW_SHARE" ]]; then
-    mkdir -p "$NEW_CACHE"
-
-    if [[ -f "$NEW_SHARE/wallpapers.json" && ! -f "$NEW_CACHE/wallpapers.json" ]]; then
-      log_info "Migrating wallpapers.json to cache..."
-      cp "$NEW_SHARE/wallpapers.json" "$NEW_CACHE/wallpapers.json"
-    fi
-
-    if [[ -d "$NEW_SHARE/thumbnails" && ! -d "$NEW_CACHE/thumbnails" ]]; then
-      log_info "Migrating thumbnails to cache..."
-      cp -r "$NEW_SHARE/thumbnails" "$NEW_CACHE/thumbnails"
-    fi
-  fi
-
-  # Config structure warning
-  if [[ -f "$NEW_CONFIG/config.json" && ! -d "$NEW_CONFIG/config" ]]; then
-    log_warn "Old single-file config detected."
-    log_info "Flokshell now uses a multi-file configuration in $NEW_CONFIG/config/"
-    log_info "Your old config.json remains at $NEW_CONFIG/config.json for reference."
-  fi
 }
 
 # === Repository Setup ===
@@ -424,7 +355,6 @@ setup_launcher() {
 }
 
 # === Main ===
-migrate_old_paths
 install_dependencies "$1"
 setup_repo
 install_quickshell

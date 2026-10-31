@@ -67,7 +67,7 @@ widgets live on inside the notch and everything imports `qs.modules.bar.*`.
 The service layer is being moved into `flokd`, a Rust daemon that owns fetching, parsing
 and system integration so QML is left with the rendering. A ported service keeps its
 singleton in `modules/services/` with the same property names and becomes a socket client,
-so nothing downstream changes. Ported so far: `CompositorService` (Hyprland state, dispatch, game mode, layout, and the generated `flokshell.{lua,conf}`), `WeatherService`, `NetworkService`, `BluetoothService`, `SystemResources`, `Brightness`, `CoverArtService`, `NightLightService`, `IdleService`, `CaffeineService`, `Screenshot` (capture, OCR, QR, Lens, colour picker), `ClipboardService`, and the thumbnail and link-preview fetchers. New clients use `FlokdSocket`.
+so nothing downstream changes. Ported so far: `CompositorService` (Hyprland state, dispatch, game mode, layout, and the generated `flokshell.{lua,conf}`), `WeatherService`, `NetworkService`, `BluetoothService`, `SystemResources`, `Brightness`, `CoverArtService`, `NightLightService`, `IdleService`, `CaffeineService`, `Screenshot` (capture, OCR, QR, Lens, colour picker), `ClipboardService`, `ScreenRecorder`, and the thumbnail and link-preview fetchers. New clients use `FlokdSocket`.
 
 ## WHERE TO LOOK
 | Task | Location |
@@ -124,6 +124,6 @@ so nothing downstream changes. Ported so far: `CompositorService` (Hyprland stat
 - Large files worth care: `ClipboardTab` (3615), `NotesTab` (3505), `TmuxTab` (2250),
   `BindsPanel` (2067), `ShellPanel` (1695), `ThemePanel` (1564), `Wallpaper` (1452).
 - Binds and compositor settings reach Hyprland only through `~/.config/hypr/flokshell.{lua,conf}`,
-  which the user's config has to include. Nothing edits the user's own config.
+  which the user's config has to include. Only `flok install hyprland` edits the user's own config.
 - Components that take a `bar` property want an object with `orientation` and
   `barPosition`. The notch and dashboard pass small `QtObject` stubs.
